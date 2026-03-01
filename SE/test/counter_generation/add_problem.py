@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 """
-将问题描述添加到filtered_predictions.json文件中
+Add problem descriptions to the filtered_predictions.json file
 
-此脚本遍历filtered_predictions.json文件，根据实例ID从SWE-bench数据集获取对应的问题描述，
-然后将问题描述添加到filtered_predictions.json的每个条目中。
+This script iterates through the filtered_predictions.json file, retrieves corresponding problem
+descriptions from the SWE-bench dataset based on instance IDs, and adds problem descriptions
+to each entry in filtered_predictions.json.
 """
 
 import json
@@ -13,25 +14,25 @@ from pathlib import Path
 from typing import Dict, Any, List
 import glob
 
-# 添加项目根目录到路径以导入sweagent模块
+# Add project root directory to path for importing sweagent module
 script_dir = Path(__file__).parent
 project_root = script_dir.parent
 sys.path.insert(0, str(project_root))
 
-# 导入SWE-bench相关的函数
+# Import SWE-bench related functions
 from datasets import load_dataset
 
 
 def get_problem_statements(subset: str = "verified", split: str = "test") -> Dict[str, str]:
     """
-    从SWE-bench数据集获取问题描述
-    
+    Retrieve problem descriptions from the SWE-bench dataset
+
     Args:
-        subset: 数据集子集，可选值为 "lite", "verified", "full"
-        split: 数据集分割，可选值为 "dev", "test"
-        
+        subset: Dataset subset, options are "lite", "verified", "full"
+        split: Dataset split, options are "dev", "test"
+
     Returns:
-        包含实例ID到问题描述映射的字典
+        Dictionary mapping instance IDs to problem descriptions
     """
     dataset_name = ""
     if subset == "full":
@@ -41,19 +42,19 @@ def get_problem_statements(subset: str = "verified", split: str = "test") -> Dic
     elif subset == "lite":
         dataset_name = "princeton-nlp/SWE-Bench_Lite"
     else:
-        raise ValueError(f"不支持的数据集子集: {subset}")
-    
-    print(f"正在加载数据集: {dataset_name}, 分割: {split}")
+        raise ValueError(f"Unsupported dataset subset: {subset}")
+
+    print(f"Loading dataset: {dataset_name}, split: {split}")
     ds = load_dataset(dataset_name, split=split)
     
-    # 创建实例ID到问题描述的映射
+    # Create mapping from instance ID to problem description
     problem_statements = {}
     for instance in ds:
         instance_id = instance["instance_id"]
         problem_statement = instance["problem_statement"]
         problem_statements[instance_id] = problem_statement
     
-    print(f"从数据集中加载了 {len(problem_statements)} 个问题描述")
+    print(f"Loaded {len(problem_statements)} problem descriptions from dataset")
     return problem_statements
 
 
@@ -63,18 +64,18 @@ def update_filtered_predictions(
     output_path: str = None
 ) -> None:
     """
-    更新filtered_predictions.json文件，添加问题描述
-    
+    Update the filtered_predictions.json file by adding problem descriptions
+
     Args:
-        filtered_predictions_path: filtered_predictions.json的路径
-        problem_statements: 实例ID到问题描述的映射
-        output_path: 输出文件路径，如果为None则覆盖原文件
+        filtered_predictions_path: Path to filtered_predictions.json
+        problem_statements: Mapping from instance IDs to problem descriptions
+        output_path: Output file path; if None, overwrites the original file
     """
-    # 读取filtered_predictions.json
+    # Read filtered_predictions.json
     with open(filtered_predictions_path, 'r', encoding='utf-8') as f:
         filtered_predictions = json.load(f)
     
-    # 添加问题描述到每个条目
+    # Add problem descriptions to each entry
     not_found_instances = []
     updated_count = 0
     for instance_id, instance_data in filtered_predictions.items():
@@ -84,40 +85,40 @@ def update_filtered_predictions(
         else:
             not_found_instances.append(instance_id)
     
-    # 报告未找到问题描述的实例
+    # Report instances where problem descriptions were not found
     if not_found_instances:
-        print(f"警告: 未找到以下实例的问题描述: {', '.join(not_found_instances)}")
-    
-    print(f"共更新了 {updated_count} 个实例的问题描述")
-    
-    # 保存更新后的数据
+        print(f"Warning: Problem descriptions not found for the following instances: {', '.join(not_found_instances)}")
+
+    print(f"Updated problem descriptions for {updated_count} instances in total")
+
+    # Save updated data
     if output_path is None:
         output_path = filtered_predictions_path
     
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(filtered_predictions, f, ensure_ascii=False, indent=2)
     
-    print(f"已将问题描述添加到 {output_path}")
+    print(f"Problem descriptions have been added to {output_path}")
 
 
 def main():
-    """主函数"""
-    # 命令行参数解析
+    """Main function"""
+    # Command line argument parsing
     import argparse
-    parser = argparse.ArgumentParser(description="将问题描述添加到pred.json文件并保存为conclusion.json")
+    parser = argparse.ArgumentParser(description="Add problem descriptions to pred.json files and save as conclusion.json")
     parser.add_argument("--base_path", default="/home/uaih3k9x/swebench/evolve_agent/newest_exp_claude37_30-125",
-                        help="基础路径，包含5个文件夹")
+                        help="Base path containing 5 folders")
     parser.add_argument("--subset", default="verified", choices=["lite", "verified", "full"],
-                        help="SWE-bench数据集子集 (默认: verified)")
+                        help="SWE-bench dataset subset (default: verified)")
     parser.add_argument("--split", default="test", choices=["dev", "test"],
-                        help="SWE-bench数据集分割 (默认: test)")
+                        help="SWE-bench dataset split (default: test)")
     args = parser.parse_args() 
     
-    # 从SWE-bench获取问题描述
+    # Get problem descriptions from SWE-bench
     problem_statements = get_problem_statements(subset=args.subset, split=args.split)
     
-    # 查找所有符合条件的pred.json文件
-    # 假设5个文件夹的名称格式为default_1, default_2, ...
+    # Find all matching pred.json files
+    # Assuming the 5 folders are named default_1, default_2, ...
     processed_count = 0
     for i in range(1, 6):
         folder_pattern = f"{args.base_path}/default_{i}/*/"
@@ -127,14 +128,14 @@ def main():
             pred_file = os.path.join(timestamp_folder, "preds.json")
             if os.path.exists(pred_file):
                 conclusion_file = os.path.join(timestamp_folder, "conclusion.json")
-                print(f"处理文件: {pred_file}")
-                print(f"输出文件: {conclusion_file}")
-                
-                # 更新pred.json并保存为conclusion.json
+                print(f"Processing file: {pred_file}")
+                print(f"Output file: {conclusion_file}")
+
+                # Update pred.json and save as conclusion.json
                 update_filtered_predictions(pred_file, problem_statements, conclusion_file)
                 processed_count += 1
     
-    print(f"处理完成，共处理了 {processed_count} 个文件")
+    print(f"Processing complete, processed {processed_count} files in total")
 
 
 if __name__ == "__main__":

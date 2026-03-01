@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
-分析filtered_predictions.json中的补丁，使用Claude API或OpenAI API进行评估，
-并将分析结果直接添加到原始filtered_predictions.json文件中
+Analyze patches in filtered_predictions.json using Claude API or OpenAI API for evaluation,
+and add analysis results directly to the original filtered_predictions.json file
 """
 
 import os
@@ -15,20 +15,20 @@ import threading
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 
-# 获取当前脚本所在目录
+# Get the directory of the current script
 current_dir = Path(__file__).parent
-# 确保能导入claude模块
+# Ensure the claude module can be imported
 sys.path.insert(0, str(current_dir))
 
-# 导入Claude API客户端
+# Import Claude API client
 from claude import ClaudeAPI, extract_content
 
-# OpenAI API配置(硬编码)
+# OpenAI API configuration (hardcoded)
 OPENAI_BASE_URL = "your_api_base"
 OPENAI_API_KEY = "api_key""
 OPENAI_MODEL = "gpt-4o"
 
-# 导入OpenAI API(如果可用)
+# Import OpenAI API (if available)
 try:
     import openai
     from openai import OpenAI
@@ -36,51 +36,51 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
 
-# 为线程安全操作添加锁
+# Add lock for thread-safe operations
 save_lock = threading.Lock()
 
 def load_filtered_predictions(file_path: str) -> Dict[str, Any]:
     """
-    加载过滤后的预测文件
-    
+    Load filtered prediction file
+
     Args:
-        file_path: 文件路径
-        
+        file_path: File path
+
     Returns:
-        加载的JSON数据
+        Loaded JSON data
     """
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
-        print(f"加载文件 {file_path} 时出错: {e}")
+        print(f"Error loading file {file_path}: {e}")
         sys.exit(1)
 
 def save_predictions(predictions: Dict[str, Any], file_path: str) -> None:
     """
-    保存预测数据到JSON文件
-    
+    Save prediction data to JSON file
+
     Args:
-        predictions: 预测数据
-        file_path: 输出文件路径
+        predictions: Prediction data
+        file_path: Output file path
     """
     try:
-        with save_lock:  # 使用锁确保线程安全
-            # 使用临时文件然后重命名的方式，避免写入中断导致文件损坏
+        with save_lock:  # Use lock to ensure thread safety
+            # Use temporary file then rename to avoid file corruption from write interruption
             temp_file = file_path + ".tmp"
             with open(temp_file, 'w', encoding='utf-8') as f:
                 json.dump(predictions, f, ensure_ascii=False, indent=2)
             os.replace(temp_file, file_path)
-            print(f"预测数据已保存到 {file_path}")
+            print(f"Prediction data saved to {file_path}")
     except Exception as e:
-        print(f"保存数据到 {file_path} 时出错: {e}")
+        print(f"Error saving data to {file_path}: {e}")
 
 def get_prompt_template() -> str:
     """
-    获取分析补丁的提示模板
-    
+    Get the prompt template for patch analysis
+
     Returns:
-        提示模板字符串
+        Prompt template string
     """
     return """
 You are an AI assistant specialized in analyzing code patches. I will provide a GitHub issue (problem_statement) and a corresponding patch. Your task is to analyze this patch and provide detailed insights that could help develop an alternative solution.
@@ -129,45 +129,45 @@ def analyze_patch_with_openai(
     model: str = OPENAI_MODEL
 ) -> Dict[str, Any]:
     """
-    使用OpenAI API分析补丁
-    
+    Analyze patch using OpenAI API
+
     Args:
-        problem_statement: 问题描述
-        model_patch: 模型补丁
-        instance_id: 实例ID
-        api_key: OpenAI API密钥
-        base_url: OpenAI API的基础URL
-        model: 模型名称
-        
+        problem_statement: Problem description
+        model_patch: Model patch
+        instance_id: Instance ID
+        api_key: OpenAI API key
+        base_url: OpenAI API base URL
+        model: Model name
+
     Returns:
-        OpenAI的分析结果
+        OpenAI analysis result
     """
     if not OPENAI_AVAILABLE:
-        print("错误: 未安装openai库，请使用 pip install openai 进行安装")
-        return {"error": "未安装openai库"}
-    
-    # 获取提示模板并填充
+        print("Error: openai library not installed, please install using pip install openai")
+        return {"error": "openai library not installed"}
+
+    # Get prompt template and fill in
     prompt_template = get_prompt_template()
     prompt = prompt_template.format(
         problem_statement=problem_statement,
         model_patch=model_patch
     )
     
-    print(f"📝 正在使用OpenAI API分析 {instance_id}...")
+    print(f"Analyzing {instance_id} using OpenAI API...")
     
     retry_count = 0
     max_retries = 3
     
     while retry_count <= max_retries:
         try:
-            # 创建OpenAI客户端
+            # Create OpenAI client
             client = OpenAI(
                 api_key=api_key,
                 base_url=base_url,
-                timeout=120  # 设置2分钟超时
+                timeout=120  # Set 2-minute timeout
             )
             
-            # 调用OpenAI API
+            # Call OpenAI API
             response = client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
@@ -175,12 +175,12 @@ def analyze_patch_with_openai(
                 max_tokens=4000
             )
             
-            # 提取内容
+            # Extract content
             content = response.choices[0].message.content
-            
-            # 尝试解析JSON响应
+
+            # Try to parse JSON response
             try:
-                # 如果返回的内容包含围绕JSON的额外文本，提取JSON部分
+                # If the returned content contains extra text surrounding JSON, extract the JSON part
                 start_idx = content.find('{')
                 end_idx = content.rfind('}') + 1
                 
@@ -188,43 +188,43 @@ def analyze_patch_with_openai(
                     json_content = content[start_idx:end_idx]
                     return json.loads(json_content)
                 else:
-                    print(f"⚠️ 警告: 无法在OpenAI响应中找到JSON格式内容: {content[:100]}...")
-                    return {"error": "无法解析JSON", "raw_content": content}
+                    print(f"Warning: Unable to find JSON format content in OpenAI response: {content[:100]}...")
+                    return {"error": "Unable to parse JSON", "raw_content": content}
             except json.JSONDecodeError as e:
-                print(f"⚠️ 解析OpenAI JSON响应时出错: {e}")
-                return {"error": "JSON解析错误", "raw_content": content}
+                print(f"Error parsing OpenAI JSON response: {e}")
+                return {"error": "JSON parse error", "raw_content": content}
                 
         except Exception as e:
             retry_count += 1
             if retry_count <= max_retries:
-                wait_time = 5 * retry_count  # 指数退避
-                print(f"⚠️ 调用OpenAI API时出错 (尝试 {retry_count}/{max_retries}): {e}，等待 {wait_time} 秒后重试...")
+                wait_time = 5 * retry_count  # Exponential backoff
+                print(f"Error calling OpenAI API (attempt {retry_count}/{max_retries}): {e}, waiting {wait_time} seconds before retry...")
                 time.sleep(wait_time)
             else:
-                print(f"❌ 调用OpenAI API失败，已达最大重试次数: {e}")
-                return {"error": f"OpenAI API错误: {str(e)}"}
+                print(f"OpenAI API call failed, max retries reached: {e}")
+                return {"error": f"OpenAI API error: {str(e)}"}
 
 def analyze_patch_with_claude(problem_statement: str, model_patch: str, instance_id: str, claude_api: ClaudeAPI) -> Dict[str, Any]:
     """
-    使用Claude API分析补丁
-    
+    Analyze patch using Claude API
+
     Args:
-        problem_statement: 问题描述
-        model_patch: 模型补丁
-        instance_id: 实例ID
-        claude_api: Claude API客户端
-        
+        problem_statement: Problem description
+        model_patch: Model patch
+        instance_id: Instance ID
+        claude_api: Claude API client
+
     Returns:
-        Claude的分析结果
+        Claude analysis result
     """
-    # 获取提示模板并填充
+    # Get prompt template and fill in
     prompt_template = get_prompt_template()
     prompt = prompt_template.format(
         problem_statement=problem_statement,
         model_patch=model_patch
     )
     
-    print(f"📝 正在使用Claude API分析 {instance_id}...")
+    print(f"Analyzing {instance_id} using Claude API...")
     
     retry_count = 0
     max_retries = 3
@@ -240,10 +240,10 @@ def analyze_patch_with_claude(problem_statement: str, model_patch: str, instance
             
             content = extract_content(response)
             
-            # 尝试解析JSON响应
+            # Try to parse JSON response
             try:
-                # 如果Claude返回的内容包含围绕JSON的额外文本，我们需要提取JSON部分
-                # 这里使用一个简单的方法：寻找第一个{和最后一个}之间的内容
+                # If Claude's response contains extra text surrounding JSON, we need to extract the JSON part
+                # Here we use a simple method: find the content between the first { and last }
                 start_idx = content.find('{')
                 end_idx = content.rfind('}') + 1
                 
@@ -251,21 +251,21 @@ def analyze_patch_with_claude(problem_statement: str, model_patch: str, instance
                     json_content = content[start_idx:end_idx]
                     return json.loads(json_content)
                 else:
-                    print(f"⚠️ 警告: 无法在响应中找到JSON格式内容: {content[:100]}...")
-                    return {"error": "无法解析JSON", "raw_content": content}
+                    print(f"Warning: Unable to find JSON format content in response: {content[:100]}...")
+                    return {"error": "Unable to parse JSON", "raw_content": content}
             except json.JSONDecodeError as e:
-                print(f"⚠️ 解析JSON响应时出错: {e}")
-                return {"error": "JSON解析错误", "raw_content": content}
+                print(f"Error parsing JSON response: {e}")
+                return {"error": "JSON parse error", "raw_content": content}
                 
         except Exception as e:
             retry_count += 1
             if retry_count <= max_retries:
-                wait_time = 5 * retry_count  # 指数退避
-                print(f"⚠️ 调用Claude API时出错 (尝试 {retry_count}/{max_retries}): {e}，等待 {wait_time} 秒后重试...")
+                wait_time = 5 * retry_count  # Exponential backoff
+                print(f"Error calling Claude API (attempt {retry_count}/{max_retries}): {e}, waiting {wait_time} seconds before retry...")
                 time.sleep(wait_time)
             else:
-                print(f"❌ 调用Claude API失败，已达最大重试次数: {e}")
-                return {"error": f"Claude API错误: {str(e)}"}
+                print(f"Claude API call failed, max retries reached: {e}")
+                return {"error": f"Claude API error: {str(e)}"}
 
 def process_single_entry(
     entry_data: Tuple[str, Dict[str, Any]], 
@@ -276,54 +276,54 @@ def process_single_entry(
     force_reprocess: bool = False
 ) -> None:
     """
-    处理单个条目
-    
+    Process a single entry
+
     Args:
-        entry_data: 包含键和数据的元组
-        predictions: 预测数据字典
-        conclusion_file: 输出文件路径
-        api_type: API类型，'claude'或'openai'
-        claude_api: Claude API客户端(当api_type为'claude'时使用)
-        force_reprocess: 是否强制重新处理已有分析的条目
+        entry_data: Tuple containing key and data
+        predictions: Prediction data dictionary
+        conclusion_file: Output file path
+        api_type: API type, 'claude' or 'openai'
+        claude_api: Claude API client (used when api_type is 'claude')
+        force_reprocess: Whether to force reprocessing of entries that already have analysis
     """
     key, instance_data = entry_data
     
-    # 如果已经处理过这个键且不强制重新处理，跳过
+    # If this key has already been processed and not force reprocessing, skip
     if "claude_analysis" in instance_data and not force_reprocess:
-        print(f"跳过已处理的条目: {key}")
+        print(f"Skipping already processed entry: {key}")
         return
     elif "claude_analysis" in instance_data and force_reprocess:
-        print(f"强制重新处理条目: {key}")
-    
-    # 提取问题陈述和补丁
+        print(f"Force reprocessing entry: {key}")
+
+    # Extract problem statement and patch
     if "problem_statement" not in instance_data:
-        print(f"警告: {key} 没有问题陈述，跳过")
+        print(f"Warning: {key} has no problem statement, skipping")
         return
         
     problem_statement = instance_data["problem_statement"]
     model_patch = instance_data["model_patch"]
     
     try:
-        # 根据API类型调用相应的分析函数
+        # Call the corresponding analysis function based on API type
         if api_type == 'claude' and claude_api:
             analysis = analyze_patch_with_claude(problem_statement, model_patch, key, claude_api)
         elif api_type == 'openai':
             analysis = analyze_patch_with_openai(problem_statement, model_patch, key)
         else:
-            print(f"错误: 无效的API配置")
+            print(f"Error: Invalid API configuration")
             return
-        
-        # 添加分析结果并保存
+
+        # Add analysis results and save
         with save_lock:
             predictions[key]["claude_analysis"] = analysis
-            # 保存时使用临时文件然后重命名，避免文件损坏风险
+            # Use temporary file then rename when saving, to avoid file corruption risk
             temp_file = conclusion_file + ".tmp"
             with open(temp_file, 'w', encoding='utf-8') as f:
                 json.dump(predictions, f, ensure_ascii=False, indent=2)
             os.replace(temp_file, conclusion_file)
-            print(f"✅ 条目 {key} 处理完成并保存")
+            print(f"Entry {key} processed and saved successfully")
     except Exception as e:
-        print(f"❌ 处理条目 {key} 时出错: {str(e)}")
+        print(f"Error processing entry {key}: {str(e)}")
         return None
 
 def process_conclusion_file(
@@ -335,49 +335,49 @@ def process_conclusion_file(
     force_reprocess: bool = False
 ) -> None:
     """
-    处理单个conclusion.json文件，使用多线程并发处理
-    
+    Process a single conclusion.json file using multi-threaded concurrent processing
+
     Args:
-        conclusion_file: conclusion.json文件路径
-        api_type: API类型，'claude'或'openai'
-        claude_api: Claude API客户端(当api_type为'claude'时使用)
-        test_mode: 是否仅测试第一条数据
-        max_workers: 最大并发线程数
-        force_reprocess: 是否强制重新处理已有分析的条目
+        conclusion_file: Path to conclusion.json file
+        api_type: API type, 'claude' or 'openai'
+        claude_api: Claude API client (used when api_type is 'claude')
+        test_mode: Whether to only test with the first data entry
+        max_workers: Maximum number of concurrent threads
+        force_reprocess: Whether to force reprocessing of entries that already have analysis
     """
-    print(f"处理文件: {conclusion_file}")
-    
-    # 加载conclusion.json数据
+    print(f"Processing file: {conclusion_file}")
+
+    # Load conclusion.json data
     predictions = load_filtered_predictions(conclusion_file)
     
-    # 确定要处理的键列表
+    # Determine the list of keys to process
     keys_to_process = list(predictions.keys())
     if test_mode:
-        # 仅处理第一个条目
+        # Only process the first entry
         keys_to_process = keys_to_process[0:1]
     
-    # 准备需要处理的条目列表
+    # Prepare list of entries to process
     entries_to_process = []
     for key in keys_to_process:
-        # 如果强制重新处理或没有分析过，则添加到处理列表
+        # Add to processing list if force reprocessing or not yet analyzed
         if force_reprocess or "claude_analysis" not in predictions[key]:
             entries_to_process.append((key, predictions[key]))
     
     if not entries_to_process:
-        print(f"文件 {conclusion_file} 中所有条目已处理，跳过")
+        print(f"All entries in file {conclusion_file} have been processed, skipping")
         return
-    
-    print(f"文件 {conclusion_file} 中有 {len(entries_to_process)} 条待处理")
-    
-    # 使用顺序 + 并发方式处理条目（分批处理）
+
+    print(f"File {conclusion_file} has {len(entries_to_process)} entries pending processing")
+
+    # Process entries using sequential + concurrent approach (batch processing)
     batch_size = min(max_workers, len(entries_to_process))
     processed_count = 0
     
     for i in range(0, len(entries_to_process), batch_size):
         batch = entries_to_process[i:i+batch_size]
-        print(f"正在处理批次 {i//batch_size + 1}/{(len(entries_to_process) + batch_size - 1)//batch_size}，共 {len(batch)} 条")
-        
-        # 使用ThreadPoolExecutor处理当前批次
+        print(f"Processing batch {i//batch_size + 1}/{(len(entries_to_process) + batch_size - 1)//batch_size}, {len(batch)} entries")
+
+        # Use ThreadPoolExecutor to process current batch
         with concurrent.futures.ThreadPoolExecutor(max_workers=batch_size) as executor:
             futures = []
             for entry_data in batch:
@@ -393,37 +393,37 @@ def process_conclusion_file(
                     )
                 )
             
-            # 等待当前批次完成
+            # Wait for current batch to complete
             for future in concurrent.futures.as_completed(futures):
                 try:
-                    future.result(timeout=180)  # 设置3分钟超时
+                    future.result(timeout=180)  # Set 3-minute timeout
                     processed_count += 1
                 except concurrent.futures.TimeoutError:
-                    print(f"⚠️ 处理条目超时")
+                    print(f"Processing entry timed out")
                 except Exception as e:
-                    print(f"⚠️ 处理条目时出错: {e}")
-        
-        # 批次间等待，避免API限流
+                    print(f"Error processing entry: {e}")
+
+        # Wait between batches to avoid API rate limiting
         if i + batch_size < len(entries_to_process):
-            wait_time = 2  # 每批次间等待2秒
-            print(f"批次处理完成，等待 {wait_time} 秒后处理下一批...")
+            wait_time = 2  # Wait 2 seconds between batches
+            print(f"Batch processing complete, waiting {wait_time} seconds before next batch...")
             time.sleep(wait_time)
     
-    print(f"文件 {conclusion_file} 处理完成，成功处理 {processed_count}/{len(entries_to_process)} 条数据")
+    print(f"File {conclusion_file} processing complete, successfully processed {processed_count}/{len(entries_to_process)} entries")
 
 def find_conclusion_files(base_path: str) -> list:
     """
-    查找所有符合条件的conclusion.json文件
-    
+    Find all matching conclusion.json files
+
     Args:
-        base_path: 基础路径
-        
+        base_path: Base path
+
     Returns:
-        文件路径列表
+        List of file paths
     """
     conclusion_files = []
     
-    # 遍历5个default文件夹
+    # Iterate through 5 default folders
     for i in range(1, 6):
         folder_pattern = f"{base_path}/default_{i}/*/"
         timestamp_folders = glob.glob(folder_pattern)
@@ -436,37 +436,37 @@ def find_conclusion_files(base_path: str) -> list:
     return conclusion_files
 
 def main():
-    """主函数"""
-    # 解析命令行参数
-    parser = argparse.ArgumentParser(description="使用LLM API分析补丁并将结果添加到conclusion.json文件")
+    """Main function"""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Analyze patches using LLM API and add results to conclusion.json files")
     parser.add_argument("--base_path", default="/home/uaih3k9x/swebench/evolve_agent/newest_exp_claude37_30-125",
-                        help="基础路径，包含5个default文件夹")
-    parser.add_argument("--test", action="store_true", help="测试模式：只处理每个文件的第一条数据")
+                        help="Base path containing 5 default folders")
+    parser.add_argument("--test", action="store_true", help="Test mode: only process the first data entry per file")
     parser.add_argument("--api_type", choices=["claude", "openai"], default="claude",
-                        help="使用的API类型：claude或openai(默认)")
+                        help="API type to use: claude or openai (default)")
     parser.add_argument("--claude_api_key", default="api_key",
-                        help="Claude API密钥")
-    parser.add_argument("--max_workers", type=int, default=3, 
-                        help="最大并发线程数，默认为3")
+                        help="Claude API key")
+    parser.add_argument("--max_workers", type=int, default=3,
+                        help="Maximum number of concurrent threads, default is 3")
     parser.add_argument("--force", action="store_true",
-                        help="强制重新处理已有分析的条目")
+                        help="Force reprocessing of entries that already have analysis")
     args = parser.parse_args()
     
-    # 根据API类型处理
+    # Process based on API type
     if args.api_type == 'claude':
-        # 初始化Claude API客户端
+        # Initialize Claude API client
         claude_api = ClaudeAPI(args.claude_api_key)
     else:  # openai
         if not OPENAI_AVAILABLE:
-            print("错误: 未安装openai库，请使用 pip install openai 进行安装")
+            print("Error: openai library not installed, please install using pip install openai")
             return
         claude_api = None
-    
-    # 查找所有conclusion.json文件
+
+    # Find all conclusion.json files
     conclusion_files = find_conclusion_files(args.base_path)
-    print(f"找到 {len(conclusion_files)} 个conclusion.json文件")
-    
-    # 处理每个文件（文件之间是顺序处理的）
+    print(f"Found {len(conclusion_files)} conclusion.json files")
+
+    # Process each file (files are processed sequentially)
     for file_path in conclusion_files:
         process_conclusion_file(
             file_path, 
@@ -477,7 +477,7 @@ def main():
             args.force
         )
         
-    print("所有文件处理完成")
+    print("All files processing complete")
 
 if __name__ == "__main__":
     main() 

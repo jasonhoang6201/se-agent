@@ -162,7 +162,7 @@ class RunBatch:
             random_delay_multiplier: We will wait for a random amount of time between 0 and `random_delay_multiplier`
                 times the number of workers at the start of each instance. This is to avoid any
                 potential race conditions.
-            instance_templates_dir: 包含实例特定system_template的目录。如果提供，将为每个实例尝试加载对应的模板。
+            instance_templates_dir: Directory containing instance-specific system_templates. If provided, it will attempt to load the corresponding template for each instance.
         """
         if self._model_id in ["human", "human_thought"] and num_workers > 1:
             msg = "Cannot run with human model in parallel"
@@ -352,17 +352,17 @@ class RunBatch:
         agent.replay_config = single_run_replay_config  # type: ignore[attr-defined]
         agent.add_hook(SetStatusAgentHook(instance.problem_statement.id, self._progress_manager.update_instance_status))
         
-        # 如果提供了实例模板目录，添加SystemTemplateHook
+        # If an instance templates directory is provided, add SystemTemplateHook
         if self._instance_templates_dir is not None:
             try:
                 from sweagent.agent.hooks.system_template_hook import SystemTemplateHook
                 hook = SystemTemplateHook(instance.problem_statement.id, self._instance_templates_dir)
                 agent.add_hook(hook)
-                self.logger.info(f"已为实例 {instance.problem_statement.id} 添加SystemTemplateHook")
+                self.logger.info(f"Added SystemTemplateHook for instance {instance.problem_statement.id}")
             except ImportError as e:
-                self.logger.warning(f"SystemTemplateHook不可用: {e}")
+                self.logger.warning(f"SystemTemplateHook is not available: {e}")
             except Exception as e:
-                self.logger.error(f"添加SystemTemplateHook时出错: {e}")
+                self.logger.error(f"Error adding SystemTemplateHook: {e}")
         
         self._progress_manager.update_instance_status(instance.problem_statement.id, "Starting environment")
         instance.env.name = f"{instance.problem_statement.id}"

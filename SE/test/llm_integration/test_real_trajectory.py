@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """
-使用实际轨迹数据测试LLM集成
+Test LLM integration using real trajectory data
 """
 
 import sys
 import os
 from pathlib import Path
 
-# 添加SE目录到Python路径
+# Add SE directory to Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from core.utils.llm_client import LLMClient, TrajectorySummarizer
 from core.utils.traj_pool_manager import TrajPoolManager
 
 def test_with_real_trajectory():
-    """使用实际轨迹数据测试"""
-    
-    # 模拟SE配置
+    """Test with real trajectory data"""
+
+    # Simulated SE configuration
     se_config = {
         "model": {
             "name": "openai/deepseek-chat",
@@ -34,62 +34,62 @@ def test_with_real_trajectory():
         }
     }
     
-    print("🧪 使用实际轨迹数据测试LLM集成...")
+    print("Testing LLM integration with real trajectory data...")
     
     try:
-        # 创建LLM客户端
+        # Create LLM client
         llm_client = LLMClient.from_se_config(se_config, use_operator_model=True)
-        print(f"✅ LLM客户端创建成功: {llm_client.config['name']}")
-        
-        # 创建轨迹池管理器
+        print(f"LLM client created successfully: {llm_client.config['name']}")
+
+        # Create trajectory pool manager
         pool_path = "/tmp/real_traj_test_pool.json"
         traj_pool_manager = TrajPoolManager(pool_path, llm_client)
         traj_pool_manager.initialize_pool()
         
-        # 读取实际轨迹数据
+        # Read real trajectory data
         traj_dir = "trajectories/test_20250714_143856"
         iteration_dirs = ["iteration_1", "iteration_2"]
         
         for i, iter_dir in enumerate(iteration_dirs, 1):
-            print(f"\n🔍 处理{iter_dir}...")
-            
-            # 轨迹文件路径
+            print(f"\nProcessing {iter_dir}...")
+
+            # Trajectory file paths
             tra_file = f"{traj_dir}/{iter_dir}/sphinx-doc__sphinx-10435/sphinx-doc__sphinx-10435.tra"
             pred_file = f"{traj_dir}/{iter_dir}/sphinx-doc__sphinx-10435/sphinx-doc__sphinx-10435.pred"
             
-            # 检查文件是否存在
+            # Check if files exist
             if not os.path.exists(tra_file):
-                print(f"❌ 轨迹文件不存在: {tra_file}")
+                print(f"Trajectory file does not exist: {tra_file}")
                 continue
                 
             if not os.path.exists(pred_file):
-                print(f"❌ 预测文件不存在: {pred_file}")
+                print(f"Prediction file does not exist: {pred_file}")
                 continue
             
-            # 读取文件内容
+            # Read file contents
             with open(tra_file, 'r', encoding='utf-8') as f:
                 trajectory_content = f.read()
             
             with open(pred_file, 'r', encoding='utf-8') as f:
                 prediction_content = f.read()
             
-            print(f"📊 轨迹内容长度: {len(trajectory_content)} 字符")
-            print(f"📊 预测内容长度: {len(prediction_content)} 字符")
-            
-            # 进行LLM总结
+            print(f"Trajectory content length: {len(trajectory_content)} characters")
+            print(f"Prediction content length: {len(prediction_content)} characters")
+
+            # Perform LLM summarization
             summary = traj_pool_manager.summarize_trajectory(
                 trajectory_content, prediction_content, i
             )
             
-            print(f"✅ 第{i}次迭代LLM总结:")
-            print(f"  方法总结: {summary.get('approach_summary', 'N/A')}")
-            print(f"  修改文件: {summary.get('modified_files', 'N/A')}")
-            print(f"  关键变化: {summary.get('key_changes', 'N/A')}")
-            print(f"  策略: {summary.get('strategy', 'N/A')}")
-            print(f"  技术: {summary.get('specific_techniques', 'N/A')}")
-            print(f"  是否为备用: {summary.get('meta', {}).get('is_fallback', False)}")
+            print(f"Iteration {i} LLM summary successful:")
+            print(f"  Approach summary: {summary.get('approach_summary', 'N/A')}")
+            print(f"  Modified files: {summary.get('modified_files', 'N/A')}")
+            print(f"  Key changes: {summary.get('key_changes', 'N/A')}")
+            print(f"  Strategy: {summary.get('strategy', 'N/A')}")
+            print(f"  Techniques: {summary.get('specific_techniques', 'N/A')}")
+            print(f"  Is fallback: {summary.get('meta', {}).get('is_fallback', False)}")
             
-            # 添加到轨迹池
+            # Add to trajectory pool
             problem = "Incorrect result with Quaternion.to_rotation_matrix()"
             traj_pool_manager.add_iteration_summary(
                 instance_name="sphinx-doc__sphinx-10435",
@@ -99,19 +99,19 @@ def test_with_real_trajectory():
                 problem=problem
             )
         
-        # 显示最终统计
+        # Display final statistics
         stats = traj_pool_manager.get_pool_stats()
-        print(f"\n📊 最终轨迹池统计: {stats}")
-        
+        print(f"\nFinal trajectory pool statistics: {stats}")
+
     except Exception as e:
-        print(f"❌ 测试失败: {e}")
+        print(f"Test failed: {e}")
         import traceback
         traceback.print_exc()
     
-    # 清理
+    # Cleanup
     try:
         os.remove(pool_path)
-        print(f"\n🧹 清理临时文件: {pool_path}")
+        print(f"\nCleaning up temporary file: {pool_path}")
     except:
         pass
 

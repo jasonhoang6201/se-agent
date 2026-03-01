@@ -1,10 +1,10 @@
 """
 SE Framework Core Module
 
-SE框架核心模块，包含运行器和工具函数。
+SE framework core module containing runners and utility functions.
 """
 
-# 暂时为空，避免导入不存在的模块
-# 未来可以在这里导入实际存在的模块
+# Temporarily empty to avoid importing non-existent modules
+# Actual module imports can be added here in the future
 
 __all__ = []

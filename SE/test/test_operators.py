@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-测试 SE 算子系统的完整功能
+Test the complete functionality of the SE operator system
 """
 
 import sys
 from pathlib import Path
 
-# 添加项目根目录到Python路径
+# Add project root directory to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -14,23 +14,23 @@ from SE.operators import list_operators, create_operator
 
 
 def test_all_operators():
-    """测试所有已注册的算子"""
+    """Test all registered operators"""
+
+    print("=== Test SE Operator System ===")
     
-    print("=== 测试 SE 算子系统 ===")
-    
-    # 1. 列出所有算子
+    # 1. List all operators
     operators = list_operators()
-    print(f"已注册的算子: {operators}")
+    print(f"Registered operators: {operators}")
     
     expected_operators = ["traj_pool_summary", "alternative_strategy"]
     for op_name in expected_operators:
         if op_name not in operators:
-            print(f"❌ {op_name} 算子未注册")
+            print(f"FAIL: {op_name} operator not registered")
             return False
+
+    print("PASS: All expected operators are registered")
     
-    print("✅ 所有期望的算子都已注册")
-    
-    # 2. 测试算子创建
+    # 2. Test operator creation
     config = {
         "operator_models": {
             "name": "openai/deepseek-chat",
@@ -41,18 +41,18 @@ def test_all_operators():
     test_workspace = "/home/uaih3k9x/630_swe/SE/trajectories/test_20250714_151848"
     
     for op_name in expected_operators:
-        print(f"\n--- 测试 {op_name} 算子 ---")
+        print(f"\n--- Test {op_name} operator ---")
         
-        # 创建算子实例
+        # Create operator instance
         operator = create_operator(op_name, config)
         if not operator:
-            print(f"❌ 创建 {op_name} 算子失败")
+            print(f"FAIL: Failed to create {op_name} operator")
             continue
+
+        print(f"PASS: Operator created successfully: {operator.get_name()}")
+        print(f"Strategy prefix: {operator.get_strategy_prefix()}")
         
-        print(f"✅ 算子创建成功: {operator.get_name()}")
-        print(f"📝 策略前缀: {operator.get_strategy_prefix()}")
-        
-        # 测试算子处理
+        # Test operator processing
         try:
             result = operator.process(
                 workspace_dir=test_workspace,
@@ -61,21 +61,21 @@ def test_all_operators():
             )
             
             if result and result.get('instance_templates_dir'):
-                print(f"✅ {op_name} 处理成功")
-                print(f"📤 输出目录: {result['instance_templates_dir']}")
+                print(f"PASS: {op_name} processing succeeded")
+                print(f"Output directory: {result['instance_templates_dir']}")
                 
-                # 检查生成的文件
+                # Check generated files
                 templates_path = Path(result['instance_templates_dir'])
                 if templates_path.exists():
                     yaml_files = list(templates_path.glob("*.yaml"))
-                    print(f"📄 生成文件: {len(yaml_files)} 个")
+                    print(f"Generated files: {len(yaml_files)}")
                     
                     if yaml_files:
-                        # 显示第一个文件的内容摘要
+                        # Show summary of first file's content
                         with open(yaml_files[0], 'r', encoding='utf-8') as f:
                             content = f.read()
                         
-                        # 提取策略内容预览
+                        # Extract strategy content preview
                         lines = content.split('\n')
                         strategy_started = False
                         strategy_lines = []
@@ -86,43 +86,43 @@ def test_all_operators():
                                 continue
                             if strategy_started and line.strip():
                                 strategy_lines.append(line.strip())
-                                if len(strategy_lines) >= 3:  # 只显示前3行
+                                if len(strategy_lines) >= 3:  # Only show first 3 lines
                                     break
                         
-                        print(f"📋 策略内容预览:")
+                        print(f"Strategy content preview:")
                         for line in strategy_lines:
                             print(f"  {line}")
                         if len(strategy_lines) >= 3:
                             print("  ...")
                 else:
-                    print(f"⚠️ 输出目录不存在: {templates_path}")
+                    print(f"WARNING: Output directory does not exist: {templates_path}")
             else:
-                print(f"❌ {op_name} 处理失败")
+                print(f"FAIL: {op_name} processing failed")
                 
         except Exception as e:
-            print(f"❌ {op_name} 测试出错: {e}")
+            print(f"FAIL: {op_name} test error: {e}")
     
-    print(f"\n🎯 测试完成")
+    print(f"\nTest complete")
     return True
 
 
 def show_operator_comparison():
-    """显示两个算子的功能对比"""
-    
-    print("\n=== 算子功能对比 ===")
+    """Show feature comparison of the two operators"""
+
+    print("\n=== Operator Feature Comparison ===")
     
     comparison = {
         "traj_pool_summary": {
-            "功能": "分析所有历史失败尝试，识别系统性盲区和风险点",
-            "输入": "所有历史迭代数据",
-            "输出": "风险感知指导 (RISK-AWARE PROBLEM SOLVING GUIDANCE)",
-            "适用场景": "已有多次尝试，需要综合分析"
+            "Function": "Analyze all historical failed attempts, identify systematic blind spots and risk points",
+            "Input": "All historical iteration data",
+            "Output": "Risk-aware guidance (RISK-AWARE PROBLEM SOLVING GUIDANCE)",
+            "Use case": "Multiple attempts already made, comprehensive analysis needed"
         },
         "alternative_strategy": {
-            "功能": "基于最近一次失败生成截然不同的替代方案",
-            "输入": "最近一次失败尝试数据",
-            "输出": "替代解决策略 (ALTERNATIVE SOLUTION STRATEGY)",
-            "适用场景": "刚失败一次，需要不同方向的尝试"
+            "Function": "Generate a fundamentally different alternative approach based on the most recent failure",
+            "Input": "Most recent failed attempt data",
+            "Output": "Alternative solution strategy (ALTERNATIVE SOLUTION STRATEGY)",
+            "Use case": "Just failed once, need a different direction to try"
         }
     }
     
@@ -131,9 +131,9 @@ def show_operator_comparison():
         for key, value in details.items():
             print(f"  {key}: {value}")
     
-    print(f"\n💡 使用建议:")
-    print(f"  - 迭代2: 使用 alternative_strategy (基于迭代1的失败)")
-    print(f"  - 迭代3+: 使用 traj_pool_summary (综合分析所有历史)")
+    print(f"\nUsage recommendations:")
+    print(f"  - Iteration 2: Use alternative_strategy (based on iteration 1 failure)")
+    print(f"  - Iteration 3+: Use traj_pool_summary (comprehensive analysis of all history)")
 
 
 if __name__ == "__main__":
@@ -141,6 +141,6 @@ if __name__ == "__main__":
     
     if success:
         show_operator_comparison()
-        print("\n🎉 SE 算子系统测试通过！")
+        print("\nSE operator system test passed!")
     else:
-        print("\n⚠️ SE 算子系统测试失败")
+        print("\nSE operator system test failed")

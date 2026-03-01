@@ -1,69 +1,69 @@
 #!/usr/bin/env python3
 """
-测试统一的问题描述获取接口
+Test the unified problem description retrieval interface
 """
 
 import sys
 from pathlib import Path
 
-# 添加SE目录到Python路径
+# Add SE directory to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.utils import get_problem_description, validate_problem_availability
 
 def test_problem_interface():
-    """测试统一问题描述接口"""
-    
-    print("🧪 测试统一问题描述获取接口...")
-    
-    # 测试目录 - 使用Demo_Structure中的实例
+    """Test unified problem description interface"""
+
+    print("Testing unified problem description retrieval interface...")
+
+    # Test directory - use instances from Demo_Structure
     test_instance = "trajectories/Demo_Structure/iteration_1/sphinx-doc__sphinx-8548"
-    
+
     if not Path(test_instance).exists():
-        print(f"❌ 测试实例目录不存在: {test_instance}")
+        print(f"Failed: Test instance directory does not exist: {test_instance}")
         return
-    
-    print(f"\n🔍 测试实例: {test_instance}")
-    
-    # 1. 验证问题描述可用性
-    print("\n1️⃣ 验证问题描述可用性...")
+
+    print(f"\nTest instance: {test_instance}")
+
+    # 1. Validate problem description availability
+    print("\n1. Validating problem description availability...")
     try:
         validation = validate_problem_availability(test_instance)
-        print(f"✅ 验证结果:")
-        print(f"  实例名称: {validation['instance_name']}")
-        print(f"  可用方法: {validation['methods_available']}")
-        print(f"  主要来源: {validation['primary_source']}")
-        print(f"  内容长度: {validation['problem_length']}")
-        print(f"  内容预览: {validation['problem_preview']}")
+        print(f"Success: Validation result:")
+        print(f"  Instance name: {validation['instance_name']}")
+        print(f"  Available methods: {validation['methods_available']}")
+        print(f"  Primary source: {validation['primary_source']}")
+        print(f"  Content length: {validation['problem_length']}")
+        print(f"  Content preview: {validation['problem_preview']}")
     except Exception as e:
-        print(f"❌ 验证失败: {e}")
-    
-    # 2. 测试自动获取
-    print("\n2️⃣ 测试自动获取...")
+        print(f"Failed: Validation error: {e}")
+
+    # 2. Test automatic retrieval
+    print("\n2. Testing automatic retrieval...")
     try:
         problem_auto = get_problem_description(test_instance)
         if problem_auto:
-            print(f"✅ 自动获取成功: {len(problem_auto)} 字符")
-            print(f"  预览: {problem_auto[:100]}...")
+            print(f"Success: Automatic retrieval succeeded: {len(problem_auto)} characters")
+            print(f"  Preview: {problem_auto[:100]}...")
         else:
-            print("❌ 自动获取失败")
+            print("Failed: Automatic retrieval failed")
     except Exception as e:
-        print(f"❌ 自动获取异常: {e}")
-    
-    # 3. 测试各种方法
+        print(f"Failed: Automatic retrieval exception: {e}")
+
+    # 3. Test various methods
     methods = ['file', 'trajectory', 'json']
     for method in methods:
-        print(f"\n3️⃣ 测试{method}方法...")
+        print(f"\n3. Testing {method} method...")
         try:
             problem = get_problem_description(test_instance, method=method)
             if problem:
-                print(f"✅ {method}方法成功: {len(problem)} 字符")
+                print(f"Success: {method} method succeeded: {len(problem)} characters")
             else:
-                print(f"⚠️  {method}方法无结果")
+                print(f"Warning: {method} method returned no result")
         except Exception as e:
-            print(f"❌ {method}方法异常: {e}")
-    
-    print("\n🎯 统一问题描述接口测试完成")
+            print(f"Failed: {method} method exception: {e}")
+
+    print("\nUnified problem description interface test completed")
 
 if __name__ == "__main__":
     test_problem_interface()

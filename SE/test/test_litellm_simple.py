@@ -1,31 +1,31 @@
 #!/usr/bin/env python3
 """
-最简单的LiteLLM测试 - 发送"你好"并打印响应
+Simplest LiteLLM test - send "Hello" and print the response
 """
 
 import litellm
 
 def test_simple_litellm():
-    """测试LiteLLM基本调用"""
-    print("开始LiteLLM测试...")
-    
-    # 配置参数
+    """Test basic LiteLLM call"""
+    print("Starting LiteLLM test...")
+
+    # Configuration parameters
     model_name = "openai/deepseek-chat"
     api_base = "http://publicshare.a.pinggy.link"
     api_key = "EMPTY"
-    
-    print(f"使用模型: {model_name}")
-    print(f"API端点: {api_base}")
-    
-    # 构建消息
+
+    print(f"Using model: {model_name}")
+    print(f"API endpoint: {api_base}")
+
+    # Build messages
     messages = [
-        {"role": "user", "content": "你好"}
+        {"role": "user", "content": "Hello"}
     ]
-    
+
     try:
-        print("正在调用LiteLLM...")
-        
-        # 调用LiteLLM
+        print("Calling LiteLLM...")
+
+        # Call LiteLLM
         response = litellm.completion(
             model=model_name,
             messages=messages,
@@ -34,14 +34,14 @@ def test_simple_litellm():
             temperature=0.7,
             max_tokens=100
         )
-        
-        print("\n=== 响应结果 ===")
-        print(f"模型: {response.model}")
-        print(f"内容: {response.choices[0].message.content}")
-        print(f"使用的tokens: {response.usage.total_tokens if response.usage else '未知'}")        
+
+        print("\n=== Response ===")
+        print(f"Model: {response.model}")
+        print(f"Content: {response.choices[0].message.content}")
+        print(f"Tokens used: {response.usage.total_tokens if response.usage else 'unknown'}")
     except Exception as e:
-        print(f"调用失败: {e}")
-        print(f"错误类型: {type(e).__name__}")
+        print(f"Call failed: {e}")
+        print(f"Error type: {type(e).__name__}")
 
 if __name__ == "__main__":
     test_simple_litellm()

@@ -3,8 +3,8 @@
 """
 Trajectory Pool Summary Operator
 
-分析轨迹池中的历史失败尝试，识别常见盲区和风险点，
-生成简洁的风险感知解决指导。
+Analyzes historical failed attempts in the trajectory pool, identifies common blind spots and risk points,
+and generates concise risk-aware problem solving guidance.
 """
 
 import json
@@ -14,7 +14,7 @@ from operators import TemplateOperator
 
 
 class TrajPoolSummaryOperator(TemplateOperator):
-    """轨迹池总结算子，生成风险感知的问题解决指导"""
+    """Trajectory pool summary operator, generates risk-aware problem solving guidance"""
     
     def get_name(self) -> str:
         return "traj_pool_summary"
@@ -24,69 +24,69 @@ class TrajPoolSummaryOperator(TemplateOperator):
     
     def _discover_instances(self, workspace_dir: Path, current_iteration: int) -> List[Dict[str, Any]]:
         """
-        重写实例发现逻辑，直接查找工作目录中的traj.pool文件
-        
+        Override instance discovery logic to directly find traj.pool files in the workspace directory
+
         Args:
-            workspace_dir: 工作目录路径
-            current_iteration: 当前迭代号
-            
+            workspace_dir: Workspace directory path
+            current_iteration: Current iteration number
+
         Returns:
-            实例信息列表
+            List of instance information
         """
         instances = []
         
-        # 直接在工作目录中查找traj.pool文件
+        # Directly find traj.pool file in the workspace directory
         traj_pool_file = workspace_dir / "traj.pool"
         if not traj_pool_file.exists():
-            self.logger.warning(f"traj.pool文件不存在: {traj_pool_file}")
+            self.logger.warning(f"traj.pool file does not exist: {traj_pool_file}")
             return instances
-        
-        # 加载traj.pool数据
+
+        # Load traj.pool data
         try:
             with open(traj_pool_file, 'r', encoding='utf-8') as f:
                 pool_data = json.load(f)
         except Exception as e:
-            self.logger.error(f"加载traj.pool失败 {traj_pool_file}: {e}")
+            self.logger.error(f"Failed to load traj.pool {traj_pool_file}: {e}")
             return instances
-        
-        # 为每个实例创建实例信息
+
+        # Create instance info for each instance
         for instance_name, instance_data in pool_data.items():
             if isinstance(instance_data, dict) and len(instance_data) > 0:
-                # 检查是否有数字键（迭代数据）
+                # Check if there are numeric keys (iteration data)
                 has_iteration_data = any(key.isdigit() for key in instance_data.keys())
                 if has_iteration_data:
                     instances.append({
                         'instance_name': instance_name,
-                        'instance_dir': workspace_dir,  # 使用工作目录作为实例目录
-                        'trajectory_file': traj_pool_file,  # 使用traj.pool文件
+                        'instance_dir': workspace_dir,  # Use workspace directory as instance directory
+                        'trajectory_file': traj_pool_file,  # Use traj.pool file
                         'previous_iteration': current_iteration - 1,
-                        'pool_data': instance_data  # 附加池数据
+                        'pool_data': instance_data  # Attach pool data
                     })
         
-        self.logger.info(f"发现 {len(instances)} 个可处理的实例")
+        self.logger.info(f"Found {len(instances)} processable instances")
         return instances
-    
+
     def _extract_problem_statement(self, trajectory_data: Dict[str, Any]) -> str:
         """
-        重写问题陈述提取，返回占位符
-        因为我们在_generate_content中直接使用pool_data中的问题陈述
+        Override problem statement extraction, return placeholder
+        because we directly use the problem statement from pool_data in _generate_content
         """
         return "placeholder"
     
     def _load_traj_pool(self, instance_dir: Path) -> Dict[str, Any]:
-        """加载轨迹池数据 - 适配SE框架的traj.pool格式"""
+        """Load trajectory pool data - adapted for SE framework's traj.pool format"""
         traj_pool_file = instance_dir / "traj.pool"
         
         if not traj_pool_file.exists():
-            self.logger.warning(f"traj.pool文件不存在: {traj_pool_file}")
+            self.logger.warning(f"traj.pool file does not exist: {traj_pool_file}")
             return {}
-        
+
         try:
             with open(traj_pool_file, 'r', encoding='utf-8') as f:
                 pool_data = json.load(f)
             
-            # SE框架的traj.pool格式: {instance_name: {problem: str, "1": {data}, "2": {data}}}
-            # 提取第一个实例的数据
+            # SE framework traj.pool format: {instance_name: {problem: str, "1": {data}, "2": {data}}}
+            # Extract data for the first instance
             for instance_name, instance_data in pool_data.items():
                 if isinstance(instance_data, dict):
                     return instance_data
@@ -94,11 +94,11 @@ class TrajPoolSummaryOperator(TemplateOperator):
             return {}
             
         except Exception as e:
-            self.logger.error(f"加载traj.pool失败 {traj_pool_file}: {e}")
+            self.logger.error(f"Failed to load traj.pool {traj_pool_file}: {e}")
             return {}
-    
+
     def _format_approaches_data(self, approaches_data: Dict[str, Any]) -> str:
-        """格式化历史尝试数据为简洁文本"""
+        """Format historical attempt data into concise text"""
         formatted_text = ""
         
         for key, data in approaches_data.items():
@@ -116,7 +116,7 @@ class TrajPoolSummaryOperator(TemplateOperator):
         return formatted_text
     
     def _generate_risk_aware_guidance(self, problem_statement: str, approaches_data: Dict[str, Any]) -> str:
-        """生成简洁的风险感知指导"""
+        """Generate concise risk-aware guidance"""
         
         system_prompt = """You are a software engineering consultant specializing in failure analysis. Analyze failed attempts and provide concise, actionable guidance for avoiding common pitfalls.
 
@@ -159,38 +159,38 @@ Keep total response under 200 words. Be specific and actionable."""
         return self._call_llm_api(prompt, system_prompt)
     
     def _generate_content(self, instance_info: Dict[str, Any], problem_statement: str, trajectory_data: Dict[str, Any]) -> str:
-        """生成轨迹池总结内容"""
+        """Generate trajectory pool summary content"""
         instance_name = instance_info['instance_name']
         
-        # 直接使用附加的池数据
+        # Directly use the attached pool data
         approaches_data = instance_info.get('pool_data', {})
         if not approaches_data:
-            self.logger.warning(f"跳过 {instance_name}: 无轨迹池数据")
+            self.logger.warning(f"Skipping {instance_name}: no trajectory pool data")
             return ""
         
-        # 使用占位符问题陈述（因为当前traj.pool格式没有problem字段）
+        # Use placeholder problem statement (since current traj.pool format has no problem field)
         pool_problem = f"Instance {instance_name} software engineering problem"
         
-        # 获取所有迭代数据（数字键）
+        # Get all iteration data (numeric keys)
         iteration_data = {k: v for k, v in approaches_data.items() 
                          if k.isdigit() and isinstance(v, dict)}
         
         if not iteration_data:
-            self.logger.warning(f"跳过 {instance_name}: 无有效迭代数据")
+            self.logger.warning(f"Skipping {instance_name}: no valid iteration data")
             return ""
         
-        self.logger.info(f"分析 {instance_name}: {len(iteration_data)} 个历史尝试")
+        self.logger.info(f"Analyzing {instance_name}: {len(iteration_data)} historical attempts")
         
-        # 生成风险感知指导
+        # Generate risk-aware guidance
         guidance = self._generate_risk_aware_guidance(pool_problem, iteration_data)
         
         if not guidance:
-            # 如果LLM调用失败，提供简化的默认指导
+            # If LLM call fails, provide simplified default guidance
             guidance = "Be careful with changes that affect multiple files. Test each change incrementally. Focus on understanding the problem before implementing solutions."
         
         return guidance
 
 
-# 注册算子
+# Register operator
 from operators import register_operator
 register_operator("traj_pool_summary", TrajPoolSummaryOperator)

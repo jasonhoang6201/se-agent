@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Instance数据管理器
-为operator提供统一的实例数据获取接口，包括problem、tra、patch、traj_pool等核心数据
+Instance Data Manager
+Provides a unified instance data retrieval interface for operators, including problem, tra, patch, traj_pool and other core data
 """
 
 from pathlib import Path
@@ -12,19 +12,19 @@ from core.utils.problem_manager import get_problem_description
 
 
 class InstanceData:
-    """单个实例的完整数据封装"""
+    """Complete data encapsulation for a single instance"""
     
     def __init__(self, instance_name: str, instance_path: str):
         self.instance_name = instance_name
         self.instance_path = Path(instance_path)
         
-        # 核心数据
+        # Core data
         self.problem_description: Optional[str] = None
-        self.tra_content: Optional[str] = None  # 压缩后的轨迹
-        self.traj_content: Optional[str] = None  # 原始轨迹
-        self.patch_content: Optional[str] = None  # 预测结果(.pred或.patch)
-        
-        # 元数据
+        self.tra_content: Optional[str] = None  # Compressed trajectory
+        self.traj_content: Optional[str] = None  # Raw trajectory
+        self.patch_content: Optional[str] = None  # Prediction result (.pred or .patch)
+
+        # Metadata
         self.available_files: List[str] = []
         self.data_sources: Dict[str, str] = {}
         
@@ -33,32 +33,32 @@ class InstanceData:
 
 
 class InstanceDataManager:
-    """Instance数据管理器 - 为operator提供统一的数据获取接口"""
+    """Instance data manager - provides a unified data retrieval interface for operators"""
     
     def __init__(self):
         self.logger = get_se_logger("instance_data", emoji="📦")
         
     def get_instance_data(self, instance_path: str, load_all: bool = True) -> InstanceData:
         """
-        获取实例的完整数据
-        
+        Get complete data for an instance
+
         Args:
-            instance_path: 实例目录路径
-            load_all: 是否立即加载所有数据，False则按需加载
-            
+            instance_path: Instance directory path
+            load_all: Whether to load all data immediately, False for lazy loading
+
         Returns:
-            InstanceData对象
+            InstanceData object
         """
         instance_path = Path(instance_path)
         instance_name = instance_path.name
         
         instance_data = InstanceData(instance_name, str(instance_path))
         
-        # 扫描可用文件
+        # Scan available files
         instance_data.available_files = self._scan_available_files(instance_path, instance_name)
         
         if load_all:
-            # 立即加载所有数据
+            # Load all data immediately
             instance_data.problem_description = self._load_problem_description(instance_path)
             instance_data.tra_content = self._load_tra_content(instance_path, instance_name)
             instance_data.traj_content = self._load_traj_content(instance_path, instance_name)
@@ -68,19 +68,19 @@ class InstanceDataManager:
     
     def get_iteration_instances(self, iteration_dir: str) -> List[InstanceData]:
         """
-        获取整个迭代目录中所有实例的数据
-        
+        Get data for all instances in an iteration directory
+
         Args:
-            iteration_dir: 迭代目录路径
-            
+            iteration_dir: Iteration directory path
+
         Returns:
-            InstanceData对象列表
+            List of InstanceData objects
         """
         iteration_path = Path(iteration_dir)
         instances = []
         
         if not iteration_path.exists():
-            self.logger.error(f"迭代目录不存在: {iteration_dir}")
+            self.logger.error(f"Iteration directory does not exist: {iteration_dir}")
             return instances
         
         for instance_path in iteration_path.iterdir():
@@ -88,19 +88,19 @@ class InstanceDataManager:
                 instance_data = self.get_instance_data(str(instance_path))
                 instances.append(instance_data)
         
-        self.logger.info(f"从 {iteration_dir} 获取了 {len(instances)} 个实例数据")
+        self.logger.info(f"Retrieved {len(instances)} instance data entries from {iteration_dir}")
         return instances
     
     def get_traj_pool_data(self, traj_pool_path: str, instance_name: str) -> Optional[Dict[str, Any]]:
         """
-        从轨迹池中获取特定实例的数据
-        
+        Get data for a specific instance from the trajectory pool
+
         Args:
-            traj_pool_path: traj.pool文件路径
-            instance_name: 实例名称
-            
+            traj_pool_path: Path to the traj.pool file
+            instance_name: Instance name
+
         Returns:
-            实例在轨迹池中的完整数据，包括problem和所有迭代总结
+            Complete data for the instance in the trajectory pool, including problem and all iteration summaries
         """
         try:
             with open(traj_pool_path, 'r', encoding='utf-8') as f:
@@ -108,28 +108,28 @@ class InstanceDataManager:
             
             instance_pool_data = pool_data.get(instance_name)
             if instance_pool_data:
-                self.logger.debug(f"从轨迹池获取实例数据: {instance_name}")
+                self.logger.debug(f"Retrieved instance data from trajectory pool: {instance_name}")
                 return instance_pool_data
             else:
-                self.logger.warning(f"轨迹池中未找到实例: {instance_name}")
+                self.logger.warning(f"Instance not found in trajectory pool: {instance_name}")
                 return None
                 
         except Exception as e:
-            self.logger.error(f"读取轨迹池失败: {e}")
+            self.logger.error(f"Failed to read trajectory pool: {e}")
             return None
     
     def get_instance_iteration_summary(self, traj_pool_path: str, instance_name: str, 
                                      iteration: Union[int, str]) -> Optional[Dict[str, Any]]:
         """
-        获取实例特定迭代的总结数据
-        
+        Get summary data for a specific iteration of an instance
+
         Args:
-            traj_pool_path: traj.pool文件路径
-            instance_name: 实例名称
-            iteration: 迭代编号
-            
+            traj_pool_path: Path to the traj.pool file
+            instance_name: Instance name
+            iteration: Iteration number
+
         Returns:
-            特定迭代的总结数据
+            Summary data for the specific iteration
         """
         pool_data = self.get_traj_pool_data(traj_pool_path, instance_name)
         if pool_data:
@@ -137,18 +137,18 @@ class InstanceDataManager:
             if iteration_key in pool_data:
                 return pool_data[iteration_key]
             else:
-                self.logger.warning(f"实例 {instance_name} 未找到迭代 {iteration}")
+                self.logger.warning(f"Iteration {iteration} not found for instance {instance_name}")
         return None
     
     def validate_instance_completeness(self, instance_data: InstanceData) -> Dict[str, Any]:
         """
-        验证实例数据的完整性
-        
+        Validate the completeness of instance data
+
         Args:
-            instance_data: 实例数据对象
-            
+            instance_data: Instance data object
+
         Returns:
-            验证结果字典
+            Validation result dictionary
         """
         result = {
             "instance_name": instance_data.instance_name,
@@ -161,12 +161,12 @@ class InstanceDataManager:
             "missing_data": []
         }
         
-        # 计算完整性分数
+        # Calculate completeness score
         core_data = ["has_problem", "has_tra", "has_patch"]
         available_count = sum(1 for key in core_data if result[key])
         result["completeness_score"] = (available_count / len(core_data)) * 100
         
-        # 记录缺失数据
+        # Record missing data
         data_mapping = {
             "has_problem": "problem_description",
             "has_tra": "tra_content", 
@@ -181,50 +181,50 @@ class InstanceDataManager:
         return result
     
     def _scan_available_files(self, instance_path: Path, instance_name: str) -> List[str]:
-        """扫描实例目录中的可用文件"""
+        """Scan available files in the instance directory"""
         extensions = ['.problem', '.tra', '.traj', '.pred', '.patch']
         available = []
         
         for ext in extensions:
             file_path = instance_path / f"{instance_name}{ext}"
             if file_path.exists():
-                available.append(ext[1:])  # 去掉点号
+                available.append(ext[1:])  # Remove the dot
         
         return available
     
     def _load_problem_description(self, instance_path: Path) -> Optional[str]:
-        """加载问题描述"""
+        """Load problem description"""
         try:
             return get_problem_description(str(instance_path))
         except Exception as e:
-            self.logger.error(f"加载问题描述失败: {e}")
+            self.logger.error(f"Failed to load problem description: {e}")
             return None
     
     def _load_tra_content(self, instance_path: Path, instance_name: str) -> Optional[str]:
-        """加载.tra文件内容"""
+        """Load .tra file content"""
         tra_file = instance_path / f"{instance_name}.tra"
         return self._read_file_safe(tra_file)
     
     def _load_traj_content(self, instance_path: Path, instance_name: str) -> Optional[str]:
-        """加载.traj文件内容"""
+        """Load .traj file content"""
         traj_file = instance_path / f"{instance_name}.traj"
         return self._read_file_safe(traj_file)
     
     def _load_patch_content(self, instance_path: Path, instance_name: str) -> Optional[str]:
-        """加载预测结果内容 - 优先.patch，备选.pred"""
-        # 优先级：.patch > .pred
+        """Load prediction result content - .patch preferred, .pred as fallback"""
+        # Priority: .patch > .pred
         for ext in ['.patch', '.pred']:
             file_path = instance_path / f"{instance_name}{ext}"
             content = self._read_file_safe(file_path)
             if content is not None:
-                self.logger.debug(f"加载预测内容: {file_path}")
+                self.logger.debug(f"Loaded prediction content: {file_path}")
                 return content
         
-        self.logger.warning(f"未找到预测文件: {instance_path}/{instance_name}.[patch|pred]")
+        self.logger.warning(f"Prediction file not found: {instance_path}/{instance_name}.[patch|pred]")
         return None
     
     def _read_file_safe(self, file_path: Path) -> Optional[str]:
-        """安全读取文件内容"""
+        """Safely read file content"""
         if not file_path.exists():
             return None
             
@@ -232,37 +232,37 @@ class InstanceDataManager:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            # 对于过长的内容进行截断处理
-            max_length = 50000  # 设置合理的最大长度
+            # Truncate overly long content
+            max_length = 50000  # Set a reasonable maximum length
             if len(content) > max_length:
-                self.logger.debug(f"文件内容被截断: {file_path} ({len(content)} -> {max_length})")
+                self.logger.debug(f"File content truncated: {file_path} ({len(content)} -> {max_length})")
                 content = content[:max_length]
             
             return content
             
         except Exception as e:
-            self.logger.error(f"读取文件失败 {file_path}: {e}")
+            self.logger.error(f"Failed to read file {file_path}: {e}")
             return None
 
 
-# 全局实例
+# Global instance
 _instance_data_manager = None
 
 def get_instance_data_manager() -> InstanceDataManager:
-    """获取全局Instance数据管理器实例"""
+    """Get the global Instance data manager instance"""
     global _instance_data_manager
     if _instance_data_manager is None:
         _instance_data_manager = InstanceDataManager()
     return _instance_data_manager
 
 def get_instance_data(instance_path: str, load_all: bool = True) -> InstanceData:
-    """便捷函数：获取实例数据"""
+    """Convenience function: get instance data"""
     return get_instance_data_manager().get_instance_data(instance_path, load_all)
 
 def get_iteration_instances(iteration_dir: str) -> List[InstanceData]:
-    """便捷函数：获取迭代实例列表"""
+    """Convenience function: get iteration instance list"""
     return get_instance_data_manager().get_iteration_instances(iteration_dir)
 
 def get_traj_pool_data(traj_pool_path: str, instance_name: str) -> Optional[Dict[str, Any]]:
-    """便捷函数：获取轨迹池实例数据"""
+    """Convenience function: get trajectory pool instance data"""
     return get_instance_data_manager().get_traj_pool_data(traj_pool_path, instance_name)

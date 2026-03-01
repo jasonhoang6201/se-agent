@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-SE框架多迭代执行脚本 (增强版)
-支持策略驱动的多次SWE-agent迭代执行
+SE Framework Multi-Iteration Execution Script (Enhanced Version)
+Supports strategy-driven multi-iteration SWE-agent execution
 
-特性:
-- 完善的配置验证和错误处理
-- iteration级别的恢复机制
-- 用户友好的错误信息和进度跟踪
-- 自动清理和重置功能
+Features:
+- Comprehensive configuration validation and error handling
+- Iteration-level recovery mechanism
+- User-friendly error messages and progress tracking
+- Automatic cleanup and reset functionality
 """
 
 import sys
@@ -22,591 +22,591 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 
-# 添加SE目录到Python路径
+# Add SE directory to Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
-# 版本信息
+# Version information
 VERSION = "2.0.0"
 DESCRIPTION = "SE Framework Enhanced Runner"
 
-# 导入SE日志系统和轨迹处理器
+# Import SE logging system and trajectory processor
 from core.utils.se_logger import setup_se_logging, get_se_logger
 from core.utils.trajectory_processor import TrajectoryProcessor
 from core.utils.traj_pool_manager import TrajPoolManager
 from core.utils.traj_extractor import TrajExtractor
 
-# 导入operator系统
+# Import operator system
 from operators import create_operator, list_operators
 
 
 class SERunException(Exception):
-    """SE框架执行异常基类"""
+    """SE framework execution exception base class"""
     pass
 
 
 class ConfigValidationError(SERunException):
-    """配置验证错误"""
+    """Configuration validation error"""
     pass
 
 
 class IterationRecoveryError(SERunException):
-    """迭代恢复错误"""
+    """Iteration recovery error"""
     pass
 
 
 def validate_config(config_path: str) -> Dict[str, Any]:
     """
-    验证配置文件有效性
-    
+    Validate configuration file validity
+
     Args:
-        config_path: 配置文件路径
-        
+        config_path: Configuration file path
+
     Returns:
-        验证通过的配置字典
-        
+        Validated configuration dictionary
+
     Raises:
-        ConfigValidationError: 配置验证失败
+        ConfigValidationError: Configuration validation failed
     """
     config_path = Path(config_path)
-    
-    # 检查配置文件是否存在
+
+    # Check if configuration file exists
     if not config_path.exists():
-        raise ConfigValidationError(f"配置文件不存在: {config_path}")
-    
+        raise ConfigValidationError(f"Configuration file does not exist: {config_path}")
+
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
     except yaml.YAMLError as e:
-        raise ConfigValidationError(f"配置文件格式错误: {e}")
+        raise ConfigValidationError(f"Configuration file format error: {e}")
     except Exception as e:
-        raise ConfigValidationError(f"读取配置文件失败: {e}")
-    
-    # 验证必要字段
+        raise ConfigValidationError(f"Failed to read configuration file: {e}")
+
+    # Validate required fields
     required_fields = ['base_config', 'model', 'instances', 'output_dir', 'strategy']
     for field in required_fields:
         if field not in config:
-            raise ConfigValidationError(f"配置文件缺少必要字段: {field}")
-    
-    # 验证model配置
+            raise ConfigValidationError(f"Configuration file missing required field: {field}")
+
+    # Validate model configuration
     if 'name' not in config['model']:
-        raise ConfigValidationError("model配置缺少name字段")
-    
-    # 验证instances配置
+        raise ConfigValidationError("Model configuration missing 'name' field")
+
+    # Validate instances configuration
     instances = config['instances']
     if 'json_file' not in instances:
-        raise ConfigValidationError("instances配置缺少json_file字段")
-    
-    # 检查实例文件是否存在 (支持相对路径)
+        raise ConfigValidationError("Instances configuration missing 'json_file' field")
+
+    # Check if instance file exists (supports relative paths)
     instances_path = Path(instances['json_file'])
     if not instances_path.is_absolute():
-        # 相对于项目根目录(630_swe)
+        # Relative to project root directory (630_swe)
         project_root = Path(__file__).parent.parent
         instances_path = project_root / instances_path
-    
+
     if not instances_path.exists():
-        raise ConfigValidationError(f"实例文件不存在: {instances_path}")
-    
-    # 验证实例文件内容
+        raise ConfigValidationError(f"Instance file does not exist: {instances_path}")
+
+    # Validate instance file contents
     try:
         with open(instances_path, 'r', encoding='utf-8') as f:
             instances_data = json.load(f)
-        
+
         key = instances.get('key', 'instances')
         if key not in instances_data:
-            raise ConfigValidationError(f"实例文件中不存在key: {key}")
-        
+            raise ConfigValidationError(f"Key not found in instance file: {key}")
+
         instance_list = instances_data[key]
         if not isinstance(instance_list, list) or len(instance_list) == 0:
-            raise ConfigValidationError(f"实例列表为空或格式错误")
-            
+            raise ConfigValidationError(f"Instance list is empty or has incorrect format")
+
     except json.JSONDecodeError as e:
-        raise ConfigValidationError(f"实例文件JSON格式错误: {e}")
+        raise ConfigValidationError(f"Instance file JSON format error: {e}")
     except Exception as e:
-        raise ConfigValidationError(f"验证实例文件失败: {e}")
-    
-    # 验证基础配置文件 (支持相对路径)
+        raise ConfigValidationError(f"Failed to validate instance file: {e}")
+
+    # Validate base configuration file (supports relative paths)
     base_config_path = Path(config['base_config'])
     if not base_config_path.is_absolute():
-        # 相对于项目根目录(630_swe)
+        # Relative to project root directory (630_swe)
         project_root = Path(__file__).parent.parent
         base_config_path = project_root / base_config_path
-    
+
     if not base_config_path.exists():
-        raise ConfigValidationError(f"基础配置文件不存在: {base_config_path}")
-    
-    # 验证strategy配置
+        raise ConfigValidationError(f"Base configuration file does not exist: {base_config_path}")
+
+    # Validate strategy configuration
     strategy = config['strategy']
     if 'iterations' not in strategy:
-        raise ConfigValidationError("strategy配置缺少iterations字段")
-    
+        raise ConfigValidationError("Strategy configuration missing 'iterations' field")
+
     iterations = strategy['iterations']
     if not isinstance(iterations, list) or len(iterations) == 0:
-        raise ConfigValidationError("iterations配置为空或格式错误")
-    
-    # 验证每个iteration配置 (支持相对路径)
+        raise ConfigValidationError("Iterations configuration is empty or has incorrect format")
+
+    # Validate each iteration configuration (supports relative paths)
     for i, iteration in enumerate(iterations, 1):
         if 'base_config' not in iteration:
-            raise ConfigValidationError(f"第{i}个iteration缺少base_config字段")
-        
+            raise ConfigValidationError(f"Iteration {i} missing 'base_config' field")
+
         iter_base_config = Path(iteration['base_config'])
         if not iter_base_config.is_absolute():
-            # 相对于项目根目录(630_swe)
+            # Relative to project root directory (630_swe)
             project_root = Path(__file__).parent.parent
             iter_base_config = project_root / iter_base_config
-        
+
         if not iter_base_config.exists():
-            raise ConfigValidationError(f"第{i}个iteration的base_config不存在: {iter_base_config}")
-    
-    print(f"✅ 配置验证通过: {len(iterations)}个迭代, {len(instance_list)}个实例")
+            raise ConfigValidationError(f"Iteration {i} base_config does not exist: {iter_base_config}")
+
+    print(f"Configuration validation passed: {len(iterations)} iterations, {len(instance_list)} instances")
     return config
 
 
 def check_existing_workspace(output_dir: str) -> Tuple[bool, List[int]]:
     """
-    检查工作空间是否已存在，如果存在则返回已完成的迭代列表
-    
+    Check if workspace already exists; if so, return the list of completed iterations
+
     Args:
-        output_dir: 输出目录
-        
+        output_dir: Output directory
+
     Returns:
         (workspace_exists, completed_iterations)
     """
     output_path = Path(output_dir)
     if not output_path.exists():
         return False, []
-    
+
     completed_iterations = []
-    
-    # 检查每个iteration目录
+
+    # Check each iteration directory
     for item in output_path.iterdir():
         if item.is_dir() and item.name.startswith('iteration_'):
             try:
                 iter_num = int(item.name.split('_')[1])
-                
-                # 检查这个iteration是否完整
-                # 通过检查是否有preds.json或run_batch_exit_statuses.yaml来判断
+
+                # Check if this iteration is complete
+                # Determined by checking for preds.json or run_batch_exit_statuses.yaml
                 if (item / 'preds.json').exists() or (item / 'run_batch_exit_statuses.yaml').exists():
                     completed_iterations.append(iter_num)
             except (ValueError, IndexError):
                 continue
-    
+
     completed_iterations.sort()
     return len(completed_iterations) > 0, completed_iterations
 
 
 def cleanup_incomplete_iteration(output_dir: str, iteration_num: int) -> None:
     """
-    清理未完成的迭代目录
-    
+    Clean up incomplete iteration directory
+
     Args:
-        output_dir: 输出目录
-        iteration_num: 迭代编号
+        output_dir: Output directory
+        iteration_num: Iteration number
     """
     iteration_dir = Path(output_dir) / f"iteration_{iteration_num}"
     if iteration_dir.exists():
-        print(f"🧹 清理未完成的迭代目录: {iteration_dir}")
+        print(f"Cleaning up incomplete iteration directory: {iteration_dir}")
         shutil.rmtree(iteration_dir)
 
 
 def safe_create_directory(dir_path: str) -> None:
     """
-    安全创建目录，包含错误处理
-    
+    Safely create directory with error handling
+
     Args:
-        dir_path: 目录路径
+        dir_path: Directory path
     """
     try:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
     except PermissionError:
-        raise SERunException(f"没有权限创建目录: {dir_path}")
+        raise SERunException(f"No permission to create directory: {dir_path}")
     except Exception as e:
-        raise SERunException(f"创建目录失败: {dir_path}, 错误: {e}")
+        raise SERunException(f"Failed to create directory: {dir_path}, error: {e}")
 
 
 def call_operator(operator_name, workspace_dir, current_iteration, se_config, logger):
     """
-    调用指定的operator处理
-    
+    Call the specified operator for processing
+
     Args:
-        operator_name: operator名称
-        workspace_dir: 工作空间根目录 (不带迭代号)
-        current_iteration: 当前迭代号
-        se_config: SE配置字典
-        logger: 日志记录器
-        
+        operator_name: Operator name
+        workspace_dir: Workspace root directory (without iteration number)
+        current_iteration: Current iteration number
+        se_config: SE configuration dictionary
+        logger: Logger instance
+
     Returns:
-        operator返回的参数字典 (如 {'instance_templates_dir': 'path'}) 或 None表示失败
+        Parameter dictionary returned by the operator (e.g., {'instance_templates_dir': 'path'}) or None on failure
     """
     try:
-        logger.info(f"开始调用operator: {operator_name}")
-        
-        # 动态创建operator实例
+        logger.info(f"Starting operator call: {operator_name}")
+
+        # Dynamically create operator instance
         operator = create_operator(operator_name, se_config)
         if not operator:
-            logger.error(f"无法创建operator实例: {operator_name}")
+            logger.error(f"Unable to create operator instance: {operator_name}")
             return None
-        
-        logger.info(f"成功创建operator实例: {operator.__class__.__name__}")
-        
-        # 调用operator.process()方法
+
+        logger.info(f"Successfully created operator instance: {operator.__class__.__name__}")
+
+        # Call operator.process() method
         result = operator.process(
             workspace_dir=workspace_dir,
             current_iteration=current_iteration,
             num_workers=se_config.get('num_workers', 1)
         )
-        
+
         if result:
-            logger.info(f"Operator {operator_name} 执行成功，返回: {list(result.keys())}")
+            logger.info(f"Operator {operator_name} executed successfully, returned: {list(result.keys())}")
             return result
         else:
-            logger.warning(f"Operator {operator_name} 执行成功但返回空结果")
+            logger.warning(f"Operator {operator_name} executed successfully but returned empty result")
             return None
-            
+
     except Exception as e:
-        logger.error(f"Operator {operator_name} 执行失败: {e}", exc_info=True)
+        logger.error(f"Operator {operator_name} execution failed: {e}", exc_info=True)
         return None
 
 
 def create_temp_config(iteration_params, base_config_path):
     """
-    为单次迭代创建临时配置文件
-    
+    Create temporary configuration file for a single iteration
+
     Args:
-        iteration_params: 迭代参数字典  
-        base_config_path: 基础配置文件路径
-        
+        iteration_params: Iteration parameter dictionary
+        base_config_path: Base configuration file path
+
     Returns:
-        临时配置文件路径
+        Temporary configuration file path
     """
-    # 创建类似test_claude.yaml格式的配置
-    # 这样swe_iterator.py会正确合并base_config
+    # Create configuration in test_claude.yaml-like format
+    # So that swe_iterator.py will correctly merge base_config
     temp_config = {
         'base_config': base_config_path,
         'model': iteration_params['model'],
         'instances': iteration_params['instances'],
         'output_dir': iteration_params['output_dir'],
         'suffix': 'iteration_run',
-        'num_workers': iteration_params.get('num_workers', 1)  # 使用传入的num_workers，默认为1
+        'num_workers': iteration_params.get('num_workers', 1)  # Use passed num_workers, default to 1
     }
-    
-    # 处理operator返回的额外参数
-    # operator可能返回instance_templates_dir或enhance_history_filter_json等参数
+
+    # Handle extra parameters returned by operator
+    # Operator may return instance_templates_dir or enhance_history_filter_json, etc.
     operator_params = iteration_params.get('operator_params', {})
     if operator_params:
-        # 将operator返回的参数添加到临时配置中
+        # Add operator-returned parameters to temporary config
         temp_config.update(operator_params)
-        print(f"🔧 Operator参数: {list(operator_params.keys())}")
-    
-    # 创建临时文件
+        print(f"Operator parameters: {list(operator_params.keys())}")
+
+    # Create temporary file
     temp_fd, temp_path = tempfile.mkstemp(suffix='.yaml', prefix='se_iteration_')
     try:
         with os.fdopen(temp_fd, 'w', encoding='utf-8') as temp_file:
             yaml.dump(temp_config, temp_file, default_flow_style=False, allow_unicode=True)
     except Exception as e:
-        # 如果fdopen成功了，不需要手动关闭temp_fd，因为with语句会处理
-        # 如果fdopen失败了，需要手动关闭
+        # If fdopen succeeded, no need to manually close temp_fd since the with statement handles it
+        # If fdopen failed, need to manually close
         try:
             os.close(temp_fd)
         except:
             pass
-        # 删除可能已创建的临时文件
+        # Delete the possibly created temporary file
         try:
             os.unlink(temp_path)
         except:
             pass
         raise e
-    
+
     return temp_path
 
 
 def call_swe_iterator(iteration_params, logger, dry_run=False):
     """
-    调用swe_iterator.py执行单次迭代
-    
+    Call swe_iterator.py to execute a single iteration
+
     Args:
-        iteration_params: 迭代参数字典
-        logger: 日志记录器
-        dry_run: 是否为演示模式
-        
+        iteration_params: Iteration parameter dictionary
+        logger: Logger instance
+        dry_run: Whether in demo mode
+
     Returns:
-        执行结果
+        Execution result
     """
     base_config_path = iteration_params['base_config']
-    
+
     try:
-        # 创建临时配置文件
-        logger.debug(f"创建临时配置文件，基于: {base_config_path}")
+        # Create temporary configuration file
+        logger.debug(f"Creating temporary configuration file based on: {base_config_path}")
         temp_config_path = create_temp_config(iteration_params, base_config_path)
-        
-        logger.info(f"临时配置文件: {temp_config_path}")
-        
-        # 打印实际配置参数以供确认（无论是否演示模式都显示）
-        print("📋 实际执行配置：")
+
+        logger.info(f"Temporary configuration file: {temp_config_path}")
+
+        # Print actual configuration parameters for confirmation (shown regardless of demo mode)
+        print("Actual execution configuration:")
         try:
             with open(temp_config_path, 'r', encoding='utf-8') as f:
                 temp_config_content = yaml.safe_load(f)
-            
-            # 关键参数显示
+
+            # Display key parameters
             print(f"  - base_config: {temp_config_content.get('base_config', 'N/A')}")
             print(f"  - model.name: {temp_config_content.get('model', {}).get('name', 'N/A')}")
             print(f"  - instances.json_file: {temp_config_content.get('instances', {}).get('json_file', 'N/A')}")
             print(f"  - output_dir: {temp_config_content.get('output_dir', 'N/A')}")
             print(f"  - num_workers: {temp_config_content.get('num_workers', 'N/A')}")
             print(f"  - suffix: {temp_config_content.get('suffix', 'N/A')}")
-            
-            logger.debug(f"临时配置内容: {json.dumps(temp_config_content, ensure_ascii=False, indent=2)}")
+
+            logger.debug(f"Temporary configuration content: {json.dumps(temp_config_content, ensure_ascii=False, indent=2)}")
         except Exception as e:
-            print(f"  ⚠️ 无法读取配置文件: {e}")
-        
+            print(f"  Warning: Unable to read configuration file: {e}")
+
         if dry_run:
-            logger.warning("演示模式：跳过实际执行")
+            logger.warning("Demo mode: skipping actual execution")
             return {"status": "skipped", "reason": "dry_run"}
-        
-        # 调用swe_iterator.py
-        logger.info("开始执行SWE-agent迭代")
-        
-        # 动态确定SE框架根目录和项目根目录
-        se_root = Path(__file__).parent  # SE目录
-        project_root = se_root.parent    # 630_swe目录
+
+        # Call swe_iterator.py
+        logger.info("Starting SWE-agent iteration execution")
+
+        # Dynamically determine SE framework root directory and project root directory
+        se_root = Path(__file__).parent  # SE directory
+        project_root = se_root.parent    # 630_swe directory
         swe_iterator_path = se_root / "core" / "swe_iterator.py"
-        
-        print(f"🚀 执行命令: python {swe_iterator_path} {temp_config_path}")
-        print(f"📁 工作目录: {project_root}")
+
+        print(f"Executing command: python {swe_iterator_path} {temp_config_path}")
+        print(f"Working directory: {project_root}")
         print("=" * 60)
-        
+
         cmd = ["python", str(swe_iterator_path), temp_config_path]
-        
-        # 不使用capture_output，让SWE-agent输出直接显示
+
+        # Do not use capture_output, let SWE-agent output display directly
         result = subprocess.run(
             cmd,
-            cwd=str(project_root),  # 使用动态确定的项目根目录
+            cwd=str(project_root),  # Use dynamically determined project root directory
             text=True
         )
-        
+
         print("=" * 60)
         if result.returncode == 0:
-            logger.info("迭代执行成功")
-            print("✅ 迭代执行成功")
+            logger.info("Iteration execution succeeded")
+            print("Iteration execution succeeded")
             return {"status": "success"}
         else:
-            logger.error(f"迭代执行失败，返回码: {result.returncode}")
-            print(f"❌ 迭代执行失败，返回码: {result.returncode}")
+            logger.error(f"Iteration execution failed, return code: {result.returncode}")
+            print(f"Iteration execution failed, return code: {result.returncode}")
             return {"status": "failed", "returncode": result.returncode}
-            
+
     except Exception as e:
-        logger.error(f"调用swe_iterator时出错: {e}", exc_info=True)
+        logger.error(f"Error calling swe_iterator: {e}", exc_info=True)
         return {"status": "error", "exception": str(e)}
     finally:
-        # 清理临时文件
+        # Clean up temporary files
         try:
             if 'temp_config_path' in locals():
                 os.unlink(temp_config_path)
-                logger.debug(f"清理临时文件: {temp_config_path}")
+                logger.debug(f"Cleaned up temporary file: {temp_config_path}")
         except Exception as e:
-            logger.warning(f"清理临时文件失败: {e}")
+            logger.warning(f"Failed to clean up temporary file: {e}")
 
 
 def main():
-    """主函数：策略驱动的多迭代执行（增强版）"""
-    
-    # 解析命令行参数
+    """Main function: strategy-driven multi-iteration execution (enhanced version)"""
+
+    # Parse command line arguments
     parser = argparse.ArgumentParser(
         description=f'{DESCRIPTION} v{VERSION}',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-示例用法:
+Example usage:
   %(prog)s --config SE/configs/se_configs/test_claude.yaml
   %(prog)s --config config.yaml --mode demo
   %(prog)s --config config.yaml --resume
   %(prog)s --config config.yaml --clean-restart
         """
     )
-    parser.add_argument('--config', default="SE/configs/se_configs/test_deepseek_se.yaml", 
-                       help='SE配置文件路径')
+    parser.add_argument('--config', default="SE/configs/se_configs/test_deepseek_se.yaml",
+                       help='SE configuration file path')
     parser.add_argument('--mode', choices=['demo', 'execute'], default='execute',
-                       help='运行模式: demo=演示模式, execute=直接执行')
+                       help='Run mode: demo=demo mode, execute=direct execution')
     parser.add_argument('--resume', action='store_true',
-                       help='恢复模式: 从上次中断处继续执行')
+                       help='Resume mode: continue execution from last interruption point')
     parser.add_argument('--clean-restart', action='store_true',
-                       help='清理重启: 删除现有工作空间重新开始')
+                       help='Clean restart: delete existing workspace and start over')
     parser.add_argument('--validate-only', action='store_true',
-                       help='仅验证配置文件，不执行')
+                       help='Only validate configuration file, do not execute')
     parser.add_argument('--version', action='version', version=f'%(prog)s {VERSION}')
     args = parser.parse_args()
-    
-    # 检查参数冲突
+
+    # Check argument conflicts
     if args.resume and args.clean_restart:
-        print("❌ 错误: --resume 和 --clean-restart 不能同时使用")
+        print("Error: --resume and --clean-restart cannot be used together")
         sys.exit(1)
-    
+
     print(f"=== {DESCRIPTION} v{VERSION} ===")
-    print(f"配置文件: {args.config}")
-    print(f"运行模式: {args.mode}")
+    print(f"Configuration file: {args.config}")
+    print(f"Run mode: {args.mode}")
     if args.resume:
-        print("🔄 恢复模式: 从上次中断处继续")
+        print("Resume mode: continuing from last interruption point")
     if args.clean_restart:
-        print("🧹 清理重启: 删除现有工作空间")
-    
+        print("Clean restart: deleting existing workspace")
+
     try:
-        # 验证配置文件
-        print("\n📋 验证配置文件...")
+        # Validate configuration file
+        print("\nValidating configuration file...")
         config = validate_config(args.config)
-        
+
         if args.validate_only:
-            print("✅ 配置验证通过，退出")
+            print("Configuration validation passed, exiting")
             return
-        
-        # 生成timestamp并替换输出目录
+
+        # Generate timestamp and replace output directory
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir = config['output_dir'].replace("{timestamp}", timestamp)
-        
-        # 检查工作空间状态
+
+        # Check workspace state
         workspace_exists, completed_iterations = check_existing_workspace(output_dir)
         start_iteration = 1
-        
+
         if workspace_exists:
-            print(f"\n🔍 发现现有工作空间: {output_dir}")
-            print(f"📊 已完成的迭代: {completed_iterations}")
-            
+            print(f"\nFound existing workspace: {output_dir}")
+            print(f"Completed iterations: {completed_iterations}")
+
             if args.clean_restart:
-                print("🧹 清理重启模式: 删除现有工作空间")
+                print("Clean restart mode: deleting existing workspace")
                 shutil.rmtree(output_dir)
                 safe_create_directory(output_dir)
             elif args.resume:
                 if completed_iterations:
                     start_iteration = max(completed_iterations) + 1
-                    print(f"🔄 恢复模式: 从第{start_iteration}次迭代开始")
-                    
-                    # 清理可能未完成的下一个迭代
+                    print(f"Resume mode: starting from iteration {start_iteration}")
+
+                    # Clean up possibly incomplete next iteration
                     cleanup_incomplete_iteration(output_dir, start_iteration)
                 else:
-                    print("🔄 恢复模式: 未找到已完成的迭代，从第1次开始")
+                    print("Resume mode: no completed iterations found, starting from iteration 1")
             else:
-                print("⚠️  工作空间已存在，请选择:")
-                print("  --resume : 从中断处继续")
-                print("  --clean-restart : 清理重启")
-                print("  或手动删除工作空间目录")
+                print("Warning: workspace already exists, please choose:")
+                print("  --resume : continue from interruption point")
+                print("  --clean-restart : clean restart")
+                print("  or manually delete the workspace directory")
                 sys.exit(1)
         else:
-            # 创建新工作空间
+            # Create new workspace
             safe_create_directory(output_dir)
-        
-        # 设置日志系统
+
+        # Set up logging system
         log_file = setup_se_logging(output_dir)
-        print(f"📝 日志文件: {log_file}")
-        
-        # 获取logger实例
-        logger = get_se_logger("basic_run", emoji="⚙️")
-        logger.info("SE框架多迭代执行启动")
-        logger.debug(f"使用配置文件: {args.config}")
-        logger.info(f"生成timestamp: {timestamp}")
-        logger.info(f"实际输出目录: {output_dir}")
-        
-        # 初始化轨迹池管理器
+        print(f"Log file: {log_file}")
+
+        # Get logger instance
+        logger = get_se_logger("basic_run", emoji="")
+        logger.info("SE framework multi-iteration execution started")
+        logger.debug(f"Using configuration file: {args.config}")
+        logger.info(f"Generated timestamp: {timestamp}")
+        logger.info(f"Actual output directory: {output_dir}")
+
+        # Initialize trajectory pool manager
         traj_pool_path = os.path.join(output_dir, "traj.pool")
-        
-        # 创建LLM客户端用于轨迹总结
+
+        # Create LLM client for trajectory summarization
         llm_client = None
         try:
             from core.utils.llm_client import LLMClient
-            # 使用operator_models配置，如果没有则使用主模型配置
+            # Use operator_models config; if not available, use main model config
             llm_client = LLMClient.from_se_config(config, use_operator_model=True)
-            logger.info(f"LLM客户端初始化成功: {llm_client.config['name']}")
+            logger.info(f"LLM client initialized successfully: {llm_client.config['name']}")
         except Exception as e:
-            logger.warning(f"LLM客户端初始化失败，将使用备用总结: {e}")
-        
+            logger.warning(f"LLM client initialization failed, will use fallback summarization: {e}")
+
         traj_pool_manager = TrajPoolManager(traj_pool_path, llm_client)
         traj_pool_manager.initialize_pool()
-        logger.info(f"轨迹池初始化: {traj_pool_path}")
-        print(f"🏊 轨迹池: {traj_pool_path}")
-        
-        print(f"\n📊 配置概览:")
-        print(f"  基础配置: {config['base_config']}")
-        print(f"  模型: {config['model']['name']}")
-        print(f"  实例文件: {config['instances']['json_file']}")
-        print(f"  输出目录: {output_dir}")
-        print(f"  迭代次数: {len(config['strategy']['iterations'])}")
-        
-        # 执行策略中的迭代（支持恢复）
+        logger.info(f"Trajectory pool initialized: {traj_pool_path}")
+        print(f"Trajectory pool: {traj_pool_path}")
+
+        print(f"\nConfiguration overview:")
+        print(f"  Base config: {config['base_config']}")
+        print(f"  Model: {config['model']['name']}")
+        print(f"  Instance file: {config['instances']['json_file']}")
+        print(f"  Output directory: {output_dir}")
+        print(f"  Number of iterations: {len(config['strategy']['iterations'])}")
+
+        # Execute iterations in strategy (supports resume)
         iterations = config['strategy']['iterations']
         total_iterations = len(iterations)
-        
-        print(f"\n🚀 开始执行: 共{total_iterations}个迭代, 从第{start_iteration}个开始")
-        
+
+        print(f"\nStarting execution: {total_iterations} total iterations, starting from iteration {start_iteration}")
+
         for i in range(start_iteration, total_iterations + 1):
-            iteration = iterations[i - 1]  # 数组索引从0开始
-            logger.info(f"开始第{i}次迭代")
-            print(f"\n=== 第{i}次迭代调用 ===")
-            
-            # 构建迭代参数
-            # 注意：只有以下三个参数在迭代间会发生变化：
-            # 1. base_config - 每次迭代使用不同的SWE-agent基础配置
-            # 2. operator - 每次迭代可能使用不同的算子策略 
-            # 3. output_dir - 每次迭代独立的输出目录
-            # 其他参数(model, instances, num_workers)在所有迭代中保持一致
+            iteration = iterations[i - 1]  # Array index starts from 0
+            logger.info(f"Starting iteration {i}")
+            print(f"\n=== Iteration {i} invocation ===")
+
+            # Build iteration parameters
+            # Note: Only the following three parameters change between iterations:
+            # 1. base_config - Each iteration uses a different SWE-agent base configuration
+            # 2. operator - Each iteration may use a different operator strategy
+            # 3. output_dir - Each iteration has an independent output directory
+            # Other parameters (model, instances, num_workers) remain consistent across all iterations
             iteration_output_dir = f"{output_dir}/iteration_{i}"
             iteration_params = {
-                "base_config": iteration['base_config'],      # 🔄 可变：SWE基础配置
-                "operator": iteration.get('operator'),       # 🔄 可变：算子策略
-                "model": config['model'],                     # ✋ 固定：模型配置
-                "instances": config['instances'],             # ✋ 固定：实例配置
-                "output_dir": iteration_output_dir,           # 🔄 可变：迭代输出目录
-                "num_workers": config.get('num_workers', 1)  # ✋ 固定：并发数配置
+                "base_config": iteration['base_config'],      # Variable: SWE base config
+                "operator": iteration.get('operator'),       # Variable: operator strategy
+                "model": config['model'],                     # Fixed: model config
+                "instances": config['instances'],             # Fixed: instance config
+                "output_dir": iteration_output_dir,           # Variable: iteration output directory
+                "num_workers": config.get('num_workers', 1)  # Fixed: concurrency config
             }
-            
-            # 处理operator返回的额外参数
+
+            # Handle extra parameters returned by operator
             operator_name = iteration.get('operator')
             if operator_name:
-                print(f"🔧 调用算子: {operator_name}")
-                logger.info(f"执行算子: {operator_name}")
-                
-                # 调用operator处理（传递workspace_dir而不是iteration_output_dir）
+                print(f"Calling operator: {operator_name}")
+                logger.info(f"Executing operator: {operator_name}")
+
+                # Call operator processing (pass workspace_dir instead of iteration_output_dir)
                 operator_result = call_operator(operator_name, output_dir, i, config, logger)
                 if operator_result:
                     iteration_params['operator_params'] = operator_result
-                    print(f"✅ Operator {operator_name} 执行成功")
-                    print(f"📋 生成参数: {list(operator_result.keys())}")
+                    print(f"Operator {operator_name} executed successfully")
+                    print(f"Generated parameters: {list(operator_result.keys())}")
                 else:
-                    print(f"⚠️  Operator {operator_name} 执行失败，继续执行但不使用增强")
-                    logger.warning(f"Operator {operator_name} 执行失败，继续执行但不使用增强")
+                    print(f"Warning: Operator {operator_name} execution failed, continuing without enhancement")
+                    logger.warning(f"Operator {operator_name} execution failed, continuing without enhancement")
             else:
-                print(f"🔄 无算子处理")
-                logger.debug(f"第{i}次迭代无算子处理")
-            
-            logger.debug(f"第{i}次迭代参数: {json.dumps(iteration_params, ensure_ascii=False)}")
-            print(f"使用配置: {iteration['base_config']}")
-            print(f"算子: {iteration.get('operator', 'None')}")
-            print(f"输出目录: {iteration_output_dir}")
-            
-            # 根据模式执行
+                print(f"No operator processing")
+                logger.debug(f"Iteration {i} has no operator processing")
+
+            logger.debug(f"Iteration {i} parameters: {json.dumps(iteration_params, ensure_ascii=False)}")
+            print(f"Using config: {iteration['base_config']}")
+            print(f"Operator: {iteration.get('operator', 'None')}")
+            print(f"Output directory: {iteration_output_dir}")
+
+            # Execute based on mode
             if args.mode == 'execute':
-                logger.info(f"直接执行模式：第{i}次迭代")
+                logger.info(f"Direct execution mode: iteration {i}")
                 result = call_swe_iterator(iteration_params, logger, dry_run=False)
-                print(f"执行结果: {result['status']}")
-                
-                # 如果迭代成功，生成.tra文件
+                print(f"Execution result: {result['status']}")
+
+                # If iteration succeeded, generate .tra files
                 if result['status'] == 'success':
-                    logger.info(f"开始为第{i}次迭代生成.tra文件")
+                    logger.info(f"Starting .tra file generation for iteration {i}")
                     try:
                         processor = TrajectoryProcessor()
                         iteration_dir = Path(iteration_output_dir)
-                        
-                        # 处理当前iteration目录
+
+                        # Process current iteration directory
                         tra_stats = processor.process_iteration_directory(iteration_dir)
-                        
+
                         if tra_stats and tra_stats.get('total_tra_files', 0) > 0:
-                            logger.info(f"第{i}次迭代.tra文件生成完成: "
-                                      f"{tra_stats['total_tra_files']}个文件, "
-                                      f"~{tra_stats['total_tokens']}tokens")
-                            print(f"📝 生成了 {tra_stats['total_tra_files']} 个.tra文件")
-                            
-                            # 更新轨迹池
-                            logger.info(f"开始更新轨迹池: 第{i}次迭代")
+                            logger.info(f"Iteration {i} .tra file generation complete: "
+                                      f"{tra_stats['total_tra_files']} files, "
+                                      f"~{tra_stats['total_tokens']} tokens")
+                            print(f"Generated {tra_stats['total_tra_files']} .tra files")
+
+                            # Update trajectory pool
+                            logger.info(f"Starting trajectory pool update: iteration {i}")
                             try:
-                                # 从实际数据中提取instance信息和.tra/.patch文件内容
+                                # Extract instance info and .tra/.patch file contents from actual data
                                 extractor = TrajExtractor()
                                 instance_data_list = extractor.extract_instance_data(iteration_dir)
-                                
+
                                 if instance_data_list:
                                     for instance_name, problem_description, trajectory_content, patch_content in instance_data_list:
                                         traj_pool_manager.add_iteration_summary(
@@ -616,90 +616,90 @@ def main():
                                             patch_content=patch_content,
                                             problem_description=problem_description
                                         )
-                                    
-                                    logger.info(f"成功提取并处理了 {len(instance_data_list)} 个实例")
+
+                                    logger.info(f"Successfully extracted and processed {len(instance_data_list)} instances")
                                 else:
-                                    logger.warning(f"第{i}次迭代没有找到有效的实例数据")
-                                    print("⚠️ 没有找到有效的实例数据")
-                                
-                                # 显示轨迹池统计
+                                    logger.warning(f"Iteration {i} found no valid instance data")
+                                    print("Warning: no valid instance data found")
+
+                                # Display trajectory pool statistics
                                 pool_stats = traj_pool_manager.get_pool_stats()
-                                logger.info(f"轨迹池更新完成: {pool_stats['total_instances']}实例, "
-                                          f"{pool_stats['total_iterations']}总迭代")
-                                print(f"🏊 轨迹池更新: {pool_stats['total_instances']}实例, "
-                                      f"{pool_stats['total_iterations']}总迭代")
-                                
+                                logger.info(f"Trajectory pool update complete: {pool_stats['total_instances']} instances, "
+                                          f"{pool_stats['total_iterations']} total iterations")
+                                print(f"Trajectory pool update: {pool_stats['total_instances']} instances, "
+                                      f"{pool_stats['total_iterations']} total iterations")
+
                             except Exception as pool_error:
-                                logger.error(f"第{i}次迭代轨迹池更新失败: {pool_error}")
-                                print(f"⚠️ 轨迹池更新失败: {pool_error}")
-                                # 不因为轨迹池更新失败而中断整个流程
+                                logger.error(f"Iteration {i} trajectory pool update failed: {pool_error}")
+                                print(f"Warning: trajectory pool update failed: {pool_error}")
+                                # Do not interrupt the entire flow due to trajectory pool update failure
                         else:
-                            logger.warning(f"第{i}次迭代未生成.tra文件")
-                            print("⚠️ 未生成.tra文件（可能没有有效轨迹）")
-                            
+                            logger.warning(f"Iteration {i} did not generate .tra files")
+                            print("Warning: no .tra files generated (possibly no valid trajectories)")
+
                     except Exception as tra_error:
-                        logger.error(f"第{i}次迭代生成.tra文件失败: {tra_error}")
-                        print(f"⚠️ .tra文件生成失败: {tra_error}")
-                        # 不因为.tra文件生成失败而中断整个流程
-                
+                        logger.error(f"Iteration {i} .tra file generation failed: {tra_error}")
+                        print(f"Warning: .tra file generation failed: {tra_error}")
+                        # Do not interrupt the entire flow due to .tra file generation failure
+
                 if result['status'] == 'failed':
-                    logger.error(f"第{i}次迭代执行失败，停止后续迭代")
+                    logger.error(f"Iteration {i} execution failed, stopping subsequent iterations")
                     break
             else:  # demo mode
-                logger.info(f"演示模式：第{i}次迭代")
+                logger.info(f"Demo mode: iteration {i}")
                 result = call_swe_iterator(iteration_params, logger, dry_run=True)
-                print(f"演示结果: {result['status']}")
-                print("📝 演示模式：跳过.tra文件生成")
-            
-        logger.info("所有迭代准备完成")
-        
-        # 显示最终轨迹池统计
+                print(f"Demo result: {result['status']}")
+                print("Demo mode: skipping .tra file generation")
+
+        logger.info("All iterations preparation complete")
+
+        # Display final trajectory pool statistics
         try:
             final_pool_stats = traj_pool_manager.get_pool_stats()
-            logger.info(f"最终轨迹池统计: {final_pool_stats}")
+            logger.info(f"Final trajectory pool statistics: {final_pool_stats}")
         except Exception as e:
-            logger.warning(f"获取轨迹池统计失败: {e}")
+            logger.warning(f"Failed to get trajectory pool statistics: {e}")
             final_pool_stats = {"total_instances": 0, "total_iterations": 0}
-        
-        print(f"\n🎯 执行总结:")
-        print(f"  ✅ 解析{len(iterations)}个迭代配置")
-        print(f"  ✅ 时间戳: {timestamp}")
-        print(f"  ✅ 日志文件: {log_file}")
-        print(f"  🏊 轨迹池: {final_pool_stats['total_instances']}实例, "
-              f"{final_pool_stats['total_iterations']}总迭代")
-        print(f"  🏊 轨迹池文件: {traj_pool_path}")
-        
-        logger.info("SE框架多迭代执行完成")
-        
+
+        print(f"\nExecution summary:")
+        print(f"  Parsed {len(iterations)} iteration configurations")
+        print(f"  Timestamp: {timestamp}")
+        print(f"  Log file: {log_file}")
+        print(f"  Trajectory pool: {final_pool_stats['total_instances']} instances, "
+              f"{final_pool_stats['total_iterations']} total iterations")
+        print(f"  Trajectory pool file: {traj_pool_path}")
+
+        logger.info("SE framework multi-iteration execution complete")
+
     except ConfigValidationError as e:
-        print(f"❌ 配置验证失败: {e}")
-        print("\n💡 解决建议:")
-        print("  1. 检查配置文件路径和格式")
-        print("  2. 确保所有必要字段都已填写")
-        print("  3. 验证文件路径是否正确")
+        print(f"Configuration validation failed: {e}")
+        print("\nSuggestions:")
+        print("  1. Check configuration file path and format")
+        print("  2. Ensure all required fields are filled in")
+        print("  3. Verify that file paths are correct")
         sys.exit(1)
-    
+
     except SERunException as e:
-        print(f"❌ SE框架执行错误: {e}")
+        print(f"SE framework execution error: {e}")
         if 'logger' in locals():
-            logger.error(f"SE框架执行错误: {e}", exc_info=True)
+            logger.error(f"SE framework execution error: {e}", exc_info=True)
         sys.exit(1)
-        
+
     except KeyboardInterrupt:
-        print(f"\n⚠️  用户中断执行")
+        print(f"\nUser interrupted execution")
         if 'logger' in locals():
-            logger.warning("用户中断执行")
-        print(f"💡 可使用 --resume 从中断处继续执行")
+            logger.warning("User interrupted execution")
+        print(f"Tip: use --resume to continue execution from the interruption point")
         sys.exit(1)
-        
+
     except Exception as e:
-        print(f"❌ 未预期的错误: {e}")
+        print(f"Unexpected error: {e}")
         if 'logger' in locals():
-            logger.error(f"未预期的错误: {e}", exc_info=True)
-        print("\n💡 解决建议:")
-        print("  1. 检查系统环境和依赖")
-        print("  2. 查看详细日志文件")
-        print("  3. 确保有足够的磁盘空间和权限")
+            logger.error(f"Unexpected error: {e}", exc_info=True)
+        print("\nSuggestions:")
+        print("  1. Check system environment and dependencies")
+        print("  2. Review the detailed log file")
+        print("  3. Ensure sufficient disk space and permissions")
         sys.exit(1)
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 """
 SE Framework Utils Package
 
-SE框架工具模块，提供日志管理、轨迹处理等核心功能。
+SE framework utilities module providing logging management, trajectory processing, and other core functionality.
 """
 
 from .se_logger import setup_se_logging, get_se_logger
@@ -19,25 +19,25 @@ from .instance_data_manager import (
 )
 
 __all__ = [
-    # 日志系统
+    # Logging system
     'setup_se_logging',
     'get_se_logger', 
-    # 轨迹处理
+    # Trajectory processing
     'TrajectoryProcessor',
     'process_trajectory_files',
     'extract_problems_from_workspace',
     'TrajPoolManager',
     'TrajSummarizer',
     'TrajExtractor',
-    # LLM集成
+    # LLM integration
     'LLMClient',
     'TrajectorySummarizer',
-    # 问题管理 (统一接口)
+    # Problem management (unified interface)
     'ProblemManager',
     'get_problem_manager', 
     'get_problem_description', 
     'validate_problem_availability',
-    # Instance数据管理 (统一数据流转)
+    # Instance data management (unified data flow)
     'InstanceData',
     'InstanceDataManager',
     'get_instance_data_manager',

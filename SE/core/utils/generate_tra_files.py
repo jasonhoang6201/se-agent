@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 
 """
-SE Framework - .tra文件生成工具
+SE Framework - .tra File Generation Tool
 
-独立的命令行工具，用于为现有的轨迹目录生成.tra文件。
-可以处理单个iteration目录或整个workspace目录。
+Standalone command-line tool for generating .tra files for existing trajectory directories.
+Can process a single iteration directory or an entire workspace directory.
 """
 
 import sys
 import argparse
 from pathlib import Path
 
-# 添加项目根目录到Python路径
+# Add project root directory to Python path
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -20,55 +20,55 @@ from SE.core.utils.se_logger import setup_se_logging, get_se_logger
 
 
 def main():
-    """主函数：.tra文件生成命令行工具"""
+    """Main function: .tra file generation command-line tool"""
     
     parser = argparse.ArgumentParser(
-        description='SE框架 - .tra文件生成工具',
+        description='SE Framework - .tra File Generation Tool',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-使用示例:
-  # 处理整个workspace目录
+Usage examples:
+  # Process entire workspace directory
   python SE/core/utils/generate_tra_files.py SE/trajectories/Demo_Structure
-  
-  # 处理指定的iteration目录
+
+  # Process a specific iteration directory
   python SE/core/utils/generate_tra_files.py SE/trajectories/Demo_Structure/iteration_1 --single-iteration
-  
-  # 只处理特定的iterations
+
+  # Process only specific iterations
   python SE/core/utils/generate_tra_files.py SE/trajectories/Demo_Structure --iterations 1 2
-  
-  # 强制重新生成（覆盖已存在的.tra文件）
+
+  # Force regeneration (overwrite existing .tra files)
   python SE/core/utils/generate_tra_files.py SE/trajectories/Demo_Structure --force
         """
     )
     
-    parser.add_argument('target_dir', 
-                       help='目标目录路径（workspace目录或iteration目录）')
+    parser.add_argument('target_dir',
+                       help='Target directory path (workspace directory or iteration directory)')
     parser.add_argument('--single-iteration', action='store_true',
-                       help='指定target_dir是单个iteration目录（如iteration_1/）')
+                       help='Specify that target_dir is a single iteration directory (e.g. iteration_1/)')
     parser.add_argument('--iterations', type=int, nargs='+',
-                       help='指定要处理的iteration编号（仅在处理workspace时有效）')
+                       help='Specify iteration numbers to process (only effective when processing workspace)')
     parser.add_argument('--force', action='store_true',
-                       help='强制重新生成，覆盖已存在的.tra文件')
+                       help='Force regeneration, overwrite existing .tra files')
     parser.add_argument('--dry-run', action='store_true',
-                       help='只显示将要处理的文件，不实际生成')
+                       help='Only show files that would be processed, without actually generating')
     parser.add_argument('--extract-problems', action='store_true',
-                       help='同时提取problem描述文件(.problem)')
+                       help='Also extract problem description files (.problem)')
     parser.add_argument('--problems-only', action='store_true',
-                       help='只提取problem文件，不生成.tra文件')
+                       help='Only extract problem files, do not generate .tra files')
     
     args = parser.parse_args()
     
-    # 验证目标目录
+    # Validate target directory
     target_path = Path(args.target_dir)
     if not target_path.exists():
-        print(f"❌ 错误: 目标目录不存在: {target_path}")
+        print(f"Error: Target directory does not exist: {target_path}")
         return 1
         
     if not target_path.is_dir():
-        print(f"❌ 错误: 目标路径不是目录: {target_path}")
+        print(f"Error: Target path is not a directory: {target_path}")
         return 1
     
-    # 设置日志系统
+    # Set up logging system
     if args.single_iteration:
         log_dir = target_path.parent
     else:
@@ -77,107 +77,107 @@ def main():
     log_file = setup_se_logging(log_dir)
     logger = get_se_logger("generate_tra_files", emoji="🎬")
     
-    print("=== SE框架 - .tra文件生成工具 ===")
-    print(f"目标目录: {target_path}")
-    print(f"处理模式: {'单iteration' if args.single_iteration else 'workspace'}")
-    print(f"日志文件: {log_file}")
+    print("=== SE Framework - .tra File Generation Tool ===")
+    print(f"Target directory: {target_path}")
+    print(f"Processing mode: {'single iteration' if args.single_iteration else 'workspace'}")
+    print(f"Log file: {log_file}")
     
     if args.dry_run:
-        print("🔍 DRY RUN模式 - 只分析，不生成文件")
+        print("DRY RUN mode - analyze only, do not generate files")
     elif args.problems_only:
-        print("📝 PROBLEMS模式 - 只提取problem文件")
+        print("PROBLEMS mode - extract problem files only")
     elif args.extract_problems:
-        print("🎯 增强模式 - 生成.tra和.problem文件")
+        print("Enhanced mode - generate .tra and .problem files")
     
     try:
         processor = TrajectoryProcessor()
         
         if args.single_iteration:
-            # 处理单个iteration目录
-            logger.info(f"开始处理单个iteration目录: {target_path}")
+            # Process single iteration directory
+            logger.info(f"Starting to process single iteration directory: {target_path}")
             
             if args.dry_run:
-                # Dry run: 只显示会处理的文件
+                # Dry run: only show files that would be processed
                 _show_traj_files(target_path)
                 return 0
             
             if args.problems_only:
-                # 只提取problem文件
+                # Extract problem files only
                 problem_result = processor.process_problems_in_iteration(target_path)
                 if problem_result and problem_result.get('total_problems', 0) > 0:
-                    print(f"✅ Problem提取完成!")
-                    print(f"  - 提取.problem文件: {problem_result['total_problems']}")
+                    print(f"Problem extraction complete!")
+                    print(f"  - Extracted .problem files: {problem_result['total_problems']}")
                     if problem_result['failed_extractions']:
-                        print(f"  - 失败提取数: {len(problem_result['failed_extractions'])}")
+                        print(f"  - Failed extractions: {len(problem_result['failed_extractions'])}")
                 else:
-                    print("⚠️ 未提取任何problem文件")
+                    print("No problem files extracted")
                     return 1
             else:
-                # 生成.tra文件
+                # Generate .tra files
                 result = processor.process_iteration_directory(target_path)
                 
                 if result and result.get('total_tra_files', 0) > 0:
-                    print(f"✅ .tra文件处理完成!")
-                    print(f"  - 创建.tra文件: {result['total_tra_files']}")
-                    print(f"  - 总token数: ~{result['total_tokens']}")
-                    print(f"  - 处理实例数: {len(result['processed_instances'])}")
-                    
+                    print(f".tra file processing complete!")
+                    print(f"  - Created .tra files: {result['total_tra_files']}")
+                    print(f"  - Total tokens: ~{result['total_tokens']}")
+                    print(f"  - Processed instances: {len(result['processed_instances'])}")
+
                     if result['failed_instances']:
-                        print(f"  - 失败实例数: {len(result['failed_instances'])}")
-                    
-                    # 如果需要，同时提取problem文件
+                        print(f"  - Failed instances: {len(result['failed_instances'])}")
+
+                    # If needed, also extract problem files
                     if args.extract_problems:
-                        print("\n📝 开始提取problem文件...")
+                        print("\nStarting problem file extraction...")
                         problem_result = processor.process_problems_in_iteration(target_path)
                         if problem_result and problem_result.get('total_problems', 0) > 0:
-                            print(f"✅ Problem提取完成!")
-                            print(f"  - 提取.problem文件: {problem_result['total_problems']}")
+                            print(f"Problem extraction complete!")
+                            print(f"  - Extracted .problem files: {problem_result['total_problems']}")
                             if problem_result['failed_extractions']:
-                                print(f"  - 失败提取数: {len(problem_result['failed_extractions'])}")
+                                print(f"  - Failed extractions: {len(problem_result['failed_extractions'])}")
                         else:
-                            print("⚠️ 未提取任何problem文件")
-                    
+                            print("No problem files extracted")
+
                 else:
-                    print("⚠️ 未生成任何.tra文件")
+                    print("No .tra files generated")
                     return 1
                 
         else:
-            # 处理整个workspace目录
-            logger.info(f"开始处理workspace目录: {target_path}")
+            # Process entire workspace directory
+            logger.info(f"Starting to process workspace directory: {target_path}")
             
             if args.dry_run:
-                # Dry run: 显示所有会处理的iteration和文件
+                # Dry run: show all iterations and files that would be processed
                 _show_workspace_overview(target_path, args.iterations)
                 return 0
             
             result = processor.process_workspace_directory(target_path, args.iterations)
             
             if result and result.get('total_tra_files', 0) > 0:
-                print(f"✅ 处理完成!")
-                print(f"  - 处理iterations: {len(result['iterations_processed'])}")
-                print(f"  - 创建.tra文件: {result['total_tra_files']}")
-                print(f"  - 总token数: ~{result['total_tokens']}")
-                
+                print(f"Processing complete!")
+                print(f"  - Processed iterations: {len(result['iterations_processed'])}")
+                print(f"  - Created .tra files: {result['total_tra_files']}")
+                print(f"  - Total tokens: ~{result['total_tokens']}")
+
                 if result['processing_errors']:
-                    print(f"  - 处理错误数: {len(result['processing_errors'])}")
+                    print(f"  - Processing errors: {len(result['processing_errors'])}")
                     for error in result['processing_errors']:
                         print(f"    * iteration_{error['iteration_number']}: {error['error']}")
             else:
-                print("⚠️ 未生成任何.tra文件")
+                print("No .tra files generated")
                 return 1
         
-        logger.info(".tra文件生成完成")
+        logger.info(".tra file generation complete")
         return 0
         
     except Exception as e:
-        logger.error(f"处理过程中出错: {e}", exc_info=True)
-        print(f"❌ 错误: {e}")
+        logger.error(f"Error during processing: {e}", exc_info=True)
+        print(f"Error: {e}")
         return 1
 
 
 def _show_traj_files(iteration_dir: Path):
-    """显示iteration目录中的.traj文件（dry run模式）"""
-    print(f"\n🔍 在 {iteration_dir} 中找到的.traj文件:")
+    """Show .traj files in iteration directory (dry run mode)"""
+    print(f"\n.traj files found in {iteration_dir}:")
     
     instance_count = 0
     traj_count = 0
@@ -197,14 +197,14 @@ def _show_traj_files(iteration_dir: Path):
                 traj_count += 1
     
     if traj_count == 0:
-        print("    (未找到任何.traj文件)")
+        print("    (No .traj files found)")
     else:
-        print(f"\n📊 统计: {instance_count} 个实例, {traj_count} 个.traj文件")
+        print(f"\nStats: {instance_count} instances, {traj_count} .traj files")
 
 
 def _show_workspace_overview(workspace_dir: Path, target_iterations=None):
-    """显示workspace目录的概览（dry run模式）"""
-    print(f"\n🔍 workspace目录概览: {workspace_dir}")
+    """Show workspace directory overview (dry run mode)"""
+    print(f"\nWorkspace directory overview: {workspace_dir}")
     
     import re
     iteration_pattern = re.compile(r'^iteration_(\d+)$')
@@ -221,7 +221,7 @@ def _show_workspace_overview(workspace_dir: Path, target_iterations=None):
     iterations.sort(key=lambda x: x[0])
     
     if not iterations:
-        print("    (未找到任何iteration目录)")
+        print("    (No iteration directories found)")
         return
     
     total_instances = 0
@@ -242,11 +242,11 @@ def _show_workspace_overview(workspace_dir: Path, target_iterations=None):
                 instance_count += 1
                 traj_count += len(traj_files)
         
-        print(f"    📊 {instance_count} 个实例, {traj_count} 个.traj文件")
+        print(f"    {instance_count} instances, {traj_count} .traj files")
         total_instances += instance_count
         total_traj_files += traj_count
     
-    print(f"\n📊 总计: {len(iterations)} 个iteration, {total_instances} 个实例, {total_traj_files} 个.traj文件")
+    print(f"\nTotal: {len(iterations)} iterations, {total_instances} instances, {total_traj_files} .traj files")
 
 
 if __name__ == "__main__":

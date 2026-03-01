@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-测试conclude_patch.py中的Claude API请求功能
+Test the Claude API request functionality in conclude_patch.py
 """
 
 import os
@@ -9,12 +9,12 @@ import json
 from pathlib import Path
 import pytest
 
-# 获取当前脚本所在目录
+# Get the directory of the current script
 current_dir = Path(__file__).parent
-# 确保能导入claude模块
+# Ensure the claude module can be imported
 sys.path.insert(0, str(current_dir))
 
-# 导入要测试的模块
+# Import the modules to test
 from conclude_patch import (
     analyze_patch_with_claude,
     ClaudeAPI,
@@ -25,15 +25,15 @@ from conclude_patch import (
 
 def test_claude_api_request_simple():
     """
-    简单测试Claude API请求功能，不验证详细字段，只验证能否成功连接
+    Simple test of Claude API request functionality, only verifying successful connection without checking detailed fields
     """
-    # 测试用的Claude API密钥
+    # Test Claude API key
     test_api_key = "api_key"
-    
-    # 创建Claude API客户端
+
+    # Create Claude API client
     claude_api = ClaudeAPI(test_api_key)
-    
-    # 发送简单请求
+
+    # Send simple request
     response = claude_api.send_message(
         message="Hello, Claude! Please respond with a simple JSON: {\"test\": \"success\"}",
         model="claude-3-7-sonnet-20250219",
@@ -41,30 +41,30 @@ def test_claude_api_request_simple():
         max_tokens=100
     )
     
-    # 验证是否收到响应
-    assert response is not None, "未收到API响应"
-    assert "content" in response, "响应格式错误"
-    
-    # 提取内容
+    # Verify response was received
+    assert response is not None, "No API response received"
+    assert "content" in response, "Response format error"
+
+    # Extract content
     content = extract_content(response)
-    print(f"API响应内容: {content[:100]}...")
-    
-    # 验证内容中是否包含"success"
-    assert "success" in content.lower(), "响应内容不符合预期"
-    
-    print("Claude API连接测试成功!")
+    print(f"API response content: {content[:100]}...")
+
+    # Verify content contains "success"
+    assert "success" in content.lower(), "Response content does not match expected"
+
+    print("Claude API connection test successful!")
 
 def test_claude_analysis_function():
     """
-    测试analyze_patch_with_claude函数的基本功能
+    Test the basic functionality of the analyze_patch_with_claude function
     """
-    # 测试用的Claude API密钥
+    # Test Claude API key
     test_api_key = "api_key"
-    
-    # 创建Claude API客户端
+
+    # Create Claude API client
     claude_api = ClaudeAPI(test_api_key)
-    
-    # 测试用的数据
+
+    # Test data
     test_problem = """
     Issue: The function `calculate_sum` does not handle negative numbers correctly.
     Expected behavior: The function should return the sum of all numbers, including negative ones.
@@ -72,12 +72,12 @@ def test_claude_analysis_function():
     
     test_patch = """
     def calculate_sum(numbers):
-        return sum([n for n in numbers if n > 0])  # 只计算正数
+        return sum([n for n in numbers if n > 0])  # Only calculate positive numbers
     """
     
     test_instance_id = "test_instance_001"
     
-    # 调用分析函数
+    # Call the analysis function
     result = analyze_patch_with_claude(
         problem_statement=test_problem,
         model_patch=test_patch,
@@ -85,54 +85,54 @@ def test_claude_analysis_function():
         claude_api=claude_api
     )
     
-    # 只验证基本结构，不检查具体字段
-    assert isinstance(result, dict), "返回结果应该是字典类型"
-    print(f"分析结果包含的字段: {list(result.keys())}")
-    
-    # 至少应该有一些字段
-    assert len(result) > 0, "返回结果为空字典"
-    
-    # 检查是否存在错误
-    assert "error" not in result, f"API请求失败: {result.get('error', '')}"
-    
-    print("Claude分析函数测试成功!")
+    # Only verify basic structure, don't check specific fields
+    assert isinstance(result, dict), "Return result should be a dictionary type"
+    print(f"Fields in analysis result: {list(result.keys())}")
+
+    # Should have at least some fields
+    assert len(result) > 0, "Return result is an empty dictionary"
+
+    # Check for errors
+    assert "error" not in result, f"API request failed: {result.get('error', '')}"
+
+    print("Claude analysis function test successful!")
 
 def test_claude_api_integration():
     """
-    测试Claude API与文件处理的集成
-    
-    这个测试会：
-    1. 创建一个测试用的conclusion.json文件
-    2. 使用Claude API分析补丁
-    3. 验证结果是否正确保存到文件中
+    Test the integration of Claude API with file processing
+
+    This test will:
+    1. Create a test conclusion.json file
+    2. Use the Claude API to analyze patches
+    3. Verify results are correctly saved to file
     """
-    # 测试用的Claude API密钥
+    # Test Claude API key
     test_api_key = "api_key"
-    
-    # 创建Claude API客户端
+
+    # Create Claude API client
     claude_api = ClaudeAPI(test_api_key)
-    
-    # 创建测试用的conclusion.json文件
+
+    # Create test conclusion.json file
     test_data = {
         "test_instance_001": {
             "problem_statement": "Issue: The function `calculate_sum` does not handle negative numbers correctly.",
-            "model_patch": "def calculate_sum(numbers):\n    return sum([n for n in numbers if n > 0])  # 只计算正数"
+            "model_patch": "def calculate_sum(numbers):\n    return sum([n for n in numbers if n > 0])  # Only calculate positive numbers"
         }
     }
     
-    # 保存测试数据
+    # Save test data
     test_file = "test_conclusion.json"
     save_predictions(test_data, test_file)
     
     try:
-        # 加载测试数据
+        # Load test data
         predictions = load_filtered_predictions(test_file)
         
-        # 处理测试数据
+        # Process test data
         instance_id = "test_instance_001"
         instance_data = predictions[instance_id]
         
-        # 调用分析函数
+        # Call the analysis function
         analysis = analyze_patch_with_claude(
             problem_statement=instance_data["problem_statement"],
             model_patch=instance_data["model_patch"],
@@ -140,25 +140,25 @@ def test_claude_api_integration():
             claude_api=claude_api
         )
         
-        # 将分析结果添加到数据中
+        # Add analysis results to the data
         predictions[instance_id]["claude_analysis"] = analysis
         
-        # 保存更新后的数据
+        # Save updated data
         save_predictions(predictions, test_file)
         
-        # 验证文件是否正确更新
+        # Verify the file was correctly updated
         updated_predictions = load_filtered_predictions(test_file)
-        assert "claude_analysis" in updated_predictions[instance_id], "分析结果未正确保存到文件中"
+        assert "claude_analysis" in updated_predictions[instance_id], "Analysis results were not correctly saved to file"
         
     finally:
-        # 清理测试文件
+        # Clean up test file
         if os.path.exists(test_file):
             os.remove(test_file)
             
-    print("Claude API与文件处理集成测试成功!")
+    print("Claude API and file processing integration test successful!")
 
 if __name__ == "__main__":
     test_claude_api_request_simple()
     test_claude_analysis_function()
     test_claude_api_integration()
-    print("所有测试通过!") 
+    print("All tests passed!") 

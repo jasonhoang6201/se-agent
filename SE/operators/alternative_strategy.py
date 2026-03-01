@@ -3,8 +3,8 @@
 """
 Alternative Strategy Operator
 
-基于最近一次失败尝试生成截然不同的替代解决策略，
-避免重复相同的错误方法。
+Generates a fundamentally different alternative solution strategy based on the most recent failed attempt,
+avoiding repetition of the same erroneous approaches.
 """
 
 import json
@@ -14,7 +14,7 @@ from operators import TemplateOperator
 
 
 class AlternativeStrategyOperator(TemplateOperator):
-    """替代策略算子，针对最近失败尝试生成正交的解决方案"""
+    """Alternative strategy operator, generates orthogonal solutions based on the most recent failed attempt"""
     
     def get_name(self) -> str:
         return "alternative_strategy"
@@ -23,18 +23,18 @@ class AlternativeStrategyOperator(TemplateOperator):
         return "ALTERNATIVE SOLUTION STRATEGY"
     
     def _load_traj_pool(self, workspace_dir: Path) -> Dict[str, Any]:
-        """加载轨迹池数据"""
+        """Load trajectory pool data"""
         traj_pool_file = workspace_dir / "traj.pool"
         
         if not traj_pool_file.exists():
-            self.logger.warning(f"traj.pool文件不存在: {traj_pool_file}")
+            self.logger.warning(f"traj.pool file does not exist: {traj_pool_file}")
             return {}
-        
+
         try:
             with open(traj_pool_file, 'r', encoding='utf-8') as f:
                 pool_data = json.load(f)
-            
-            # 返回第一个实例的数据
+
+            # Return data for the first instance
             for instance_name, instance_data in pool_data.items():
                 if isinstance(instance_data, dict):
                     return instance_data
@@ -42,15 +42,15 @@ class AlternativeStrategyOperator(TemplateOperator):
             return {}
             
         except Exception as e:
-            self.logger.error(f"加载traj.pool失败 {traj_pool_file}: {e}")
+            self.logger.error(f"Failed to load traj.pool {traj_pool_file}: {e}")
             return {}
     
     def _get_latest_failed_approach(self, approaches_data: Dict[str, Any]) -> str:
-        """获取最近一次失败尝试的详细信息"""
+        """Get detailed information about the most recent failed attempt"""
         if not approaches_data:
             return ""
         
-        # 找到最大的迭代号
+        # Find the maximum iteration number
         iteration_nums = []
         for key in approaches_data.keys():
             if key != "problem" and key.isdigit():
@@ -62,11 +62,11 @@ class AlternativeStrategyOperator(TemplateOperator):
         latest_iteration = max(iteration_nums)
         latest_data = approaches_data.get(str(latest_iteration), {})
         
-        # 格式化最近尝试的信息
+        # Format information about the most recent attempt
         approach_summary = []
         approach_summary.append(f"Strategy: {latest_data.get('strategy', 'N/A')}")
         
-        # 检查是否为失败实例
+        # Check if this is a failed instance
         if latest_data.get('strategy_status') == 'FAILED':
             approach_summary.append(f"STATUS: FAILED - {latest_data.get('failure_reason', 'Unknown failure')}")
         
@@ -88,7 +88,7 @@ class AlternativeStrategyOperator(TemplateOperator):
         return "\n".join(approach_summary)
     
     def _generate_alternative_strategy(self, problem_statement: str, previous_approach: str) -> str:
-        """生成截然不同的替代策略"""
+        """Generate a fundamentally different alternative strategy"""
         
         system_prompt = """You are an expert software engineering strategist specializing in breakthrough problem-solving. Your task is to generate a fundamentally different approach to a software engineering problem, based on analyzing a previous failed attempt.
 
@@ -134,35 +134,35 @@ Keep response under 200 words."""
         return self._call_llm_api(prompt, system_prompt)
     
     def _generate_content(self, instance_info: Dict[str, Any], problem_statement: str, trajectory_data: Dict[str, Any]) -> str:
-        """生成替代策略内容"""
+        """Generate alternative strategy content"""
         instance_dir = instance_info['instance_dir']
         instance_name = instance_info['instance_name']
         
-        # 加载轨迹池数据（从workspace_dir，通过instance_dir计算）
+        # Load trajectory pool data (from workspace_dir, computed via instance_dir)
         workspace_dir = instance_dir.parent.parent
         approaches_data = self._load_traj_pool(workspace_dir)
         if not approaches_data:
-            self.logger.warning(f"跳过 {instance_name}: 无轨迹池数据")
+            self.logger.warning(f"Skipping {instance_name}: no trajectory pool data")
             return ""
         
-        # 获取最近一次失败尝试
+        # Get the most recent failed attempt
         latest_approach = self._get_latest_failed_approach(approaches_data)
         if not latest_approach:
-            self.logger.warning(f"跳过 {instance_name}: 无最近失败尝试数据")
+            self.logger.warning(f"Skipping {instance_name}: no recent failed attempt data")
             return ""
         
-        self.logger.info(f"分析 {instance_name}: 基于最近失败尝试生成替代策略")
+        self.logger.info(f"Analyzing {instance_name}: generating alternative strategy based on most recent failed attempt")
         
-        # 生成替代策略
+        # Generate alternative strategy
         strategy = self._generate_alternative_strategy(problem_statement, latest_approach)
         
         if not strategy:
-            # 如果LLM调用失败，提供简单的默认替代策略
+            # If LLM call fails, provide a simple default alternative strategy
             strategy = "Try a more direct approach: focus on the specific error message, search for similar issues in the codebase, and make minimal targeted changes rather than broad modifications."
         
         return strategy
 
 
-# 注册算子
+# Register operator
 from operators import register_operator
 register_operator("alternative_strategy", AlternativeStrategyOperator)

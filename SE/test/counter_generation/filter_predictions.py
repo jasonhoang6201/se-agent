@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """
-过滤并保存预测结果的脚本
+Script for filtering and saving prediction results
 
-此脚本从预测文件中过滤出指定ID的预测结果，并将其保存到新文件中。
+This script filters prediction results for specified IDs from the prediction file and saves them to a new file.
 """
 
 import json
@@ -13,39 +13,39 @@ from typing import Dict, Set, Any
 
 def read_predictions(file_path: str) -> Dict[str, Any]:
     """
-    读取并解析预测文件
-    
+    Read and parse the prediction file
+
     Args:
-        file_path: 预测文件的路径
-        
+        file_path: Path to the prediction file
+
     Returns:
-        解析后的JSON数据
+        Parsed JSON data
     """
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         return data
     except FileNotFoundError:
-        print(f"错误: 文件 {file_path} 不存在")
+        print(f"Error: File {file_path} does not exist")
         return {}
     except json.JSONDecodeError:
-        print(f"错误: 文件 {file_path} 不是有效的JSON格式")
+        print(f"Error: File {file_path} is not valid JSON format")
         return {}
     except Exception as e:
-        print(f"读取文件时发生错误: {str(e)}")
+        print(f"Error occurred while reading file: {str(e)}")
         return {}
 
 
 def filter_predictions(predictions: Dict[str, Any], target_ids: Set[str]) -> Dict[str, Any]:
     """
-    过滤预测结果，只保留指定ID的预测
-    
+    Filter prediction results, keeping only predictions for specified IDs
+
     Args:
-        predictions: 所有预测结果的字典
-        target_ids: 目标ID集合
-        
+        predictions: Dictionary of all prediction results
+        target_ids: Set of target IDs
+
     Returns:
-        过滤后的预测结果字典
+        Filtered prediction results dictionary
     """
     filtered_predictions = {}
     i = 0
@@ -60,23 +60,23 @@ def filter_predictions(predictions: Dict[str, Any], target_ids: Set[str]) -> Dic
 
 def save_predictions(predictions: Dict[str, Any], output_path: str) -> None:
     """
-    保存预测结果到指定文件
-    
+    Save prediction results to the specified file
+
     Args:
-        predictions: 预测结果字典
-        output_path: 输出文件路径
+        predictions: Prediction results dictionary
+        output_path: Output file path
     """
     try:
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(predictions, f, ensure_ascii=False, indent=2)
-        print(f"已成功保存 {len(predictions)} 个预测结果到 {output_path}")
+        print(f"Successfully saved {len(predictions)} prediction results to {output_path}")
     except Exception as e:
-        print(f"保存文件时发生错误: {str(e)}")
+        print(f"Error occurred while saving file: {str(e)}")
 
 
 def main():
-    """主函数"""
-    # 目标实例ID集合
+    """Main function"""
+    # Target instance ID set
     target_ids = {
         "django__django-11551",
         "django__django-14672",
@@ -91,29 +91,30 @@ def main():
         "sphinx-doc__sphinx-9281"
     }
     
-    # 预测文件路径 - 用户可以根据需要修改
+    # Prediction file path - users can modify as needed
+    # 用于充当反例 meaning "used as counter-examples"
     pred_file_path = "/home/uaih3k9x/swebench/evolve_agent/trajectories/uaih3k9x/default__deepseek/用于充当反例/preds.json"
     
-    # 输出文件路径
+    # Output file path
     output_dir = Path("counter_generation")
     output_dir.mkdir(exist_ok=True)
     output_path = output_dir / "filtered_predictions.json"
     
-    # 读取预测文件
-    print(f"正在读取预测文件: {pred_file_path}")
+    # Read prediction file
+    print(f"Reading prediction file: {pred_file_path}")
     predictions = read_predictions(pred_file_path)
     
     if predictions:
-        print(f"成功读取预测文件，包含 {len(predictions)} 个预测结果")
-        
-        # 过滤预测
+        print(f"Successfully read prediction file, contains {len(predictions)} prediction results")
+
+        # Filter predictions
         filtered_predictions = filter_predictions(predictions, target_ids)
-        print(f"已过滤得到 {len(filtered_predictions)} 个匹配的预测结果")
-        
-        # 保存过滤后的预测
+        print(f"Filtered down to {len(filtered_predictions)} matching prediction results")
+
+        # Save filtered predictions
         save_predictions(filtered_predictions, output_path)
     else:
-        print("没有找到预测结果，请检查预测文件路径是否正确")
+        print("No prediction results found, please check if the prediction file path is correct")
 
 
 if __name__ == "__main__":

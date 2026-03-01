@@ -3,7 +3,7 @@
 """
 SE Operators Package
 
-算子系统的统一入口，提供算子注册和访问功能。
+Unified entry point for the operator system, providing operator registration and access functionality.
 """
 
 from .base import BaseOperator, TemplateOperator, EnhanceOperator
@@ -15,13 +15,13 @@ from .registry import (
     get_registry
 )
 
-# 导入具体算子实现
+# Import concrete operator implementations
 from .traj_pool_summary import TrajPoolSummaryOperator
 from .alternative_strategy import AlternativeStrategyOperator
 from .trajectory_analyzer import TrajectoryAnalyzerOperator
 from .crossover import CrossoverOperator
 
-# 后续导入其他算子实现
+# Import other operator implementations later
 # from .conclusion import ConclusionOperator
 # from .summary_bug import SummaryBugOperator
 

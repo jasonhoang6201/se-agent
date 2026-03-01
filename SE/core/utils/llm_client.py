@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-LLM客户端模块
-为SE框架提供统一的LLM调用接口
+LLM Client Module
+Provides a unified LLM calling interface for the SE framework
 """
 
 from openai import OpenAI
@@ -10,93 +10,99 @@ from core.utils.se_logger import get_se_logger
 
 
 class LLMClient:
-    """LLM客户端，支持多种模型和API端点"""
+    """LLM client supporting multiple models and API endpoints"""
     
     def __init__(self, model_config: Dict[str, Any]):
         """
-        初始化LLM客户端
-        
+        Initialize the LLM client
+
         Args:
-            model_config: 模型配置字典，包含name, api_base, api_key等
+            model_config: Model configuration dictionary containing name, api_base, api_key, etc.
         """
         self.config = model_config
         self.logger = get_se_logger("llm_client", emoji="🤖")
         
-        # 验证必需的配置参数
+        # Validate required configuration parameters
         required_keys = ["name", "api_base", "api_key"]
         missing_keys = [key for key in required_keys if key not in model_config]
         if missing_keys:
-            raise ValueError(f"缺少必需的配置参数: {missing_keys}")
+            raise ValueError(f"Missing required configuration parameters: {missing_keys}")
         
-        # 初始化OpenAI客户端，遵循api_test.py的工作模式
+        # Strip litellm provider prefix (e.g. "openai/DeepSeek-V3.1" -> "DeepSeek-V3.1")
+        # The raw OpenAI SDK doesn't understand litellm provider prefixes
+        self._model_name = self.config["name"]
+        if "/" in self._model_name:
+            self._model_name = self._model_name.split("/", 1)[1]
+        
+        # Initialize OpenAI client, following the working pattern from api_test.py
         self.client = OpenAI(
             api_key=self.config["api_key"],
             base_url=self.config["api_base"],
         )
         
-        self.logger.info(f"初始化LLM客户端: {self.config['name']}")
+        self.logger.info(f"Initialized LLM client: {self.config['name']} (model: {self._model_name})")
     
     def call_llm(self, messages: List[Dict[str, str]], 
                  temperature: float = 0.3, 
                  max_tokens: Optional[int] = None) -> str:
         """
-        调用LLM并返回响应内容
-        
+        Call the LLM and return the response content
+
         Args:
-            messages: 消息列表，每个消息包含role和content
-            temperature: 温度参数，控制输出随机性
-            max_tokens: 最大输出token数，None表示使用配置默认值
-            
+            messages: List of messages, each containing role and content
+            temperature: Temperature parameter controlling output randomness
+            max_tokens: Maximum output token count, None uses the configured default
+
         Returns:
-            LLM响应的文本内容
-            
+            Text content of the LLM response
+
         Raises:
-            Exception: LLM调用失败时抛出异常
+            Exception: Raised when the LLM call fails
         """
         try:
-            # 使用配置中的max_output_tokens作为默认值
+            # Use max_output_tokens from config as default
             if max_tokens is None:
                 max_tokens = self.config.get("max_output_tokens", 4000)
             
-            self.logger.debug(f"调用LLM: {len(messages)} 条消息, temp={temperature}, max_tokens={max_tokens}")
+            self.logger.debug(f"Calling LLM: {len(messages)} messages, temp={temperature}, max_tokens={max_tokens}")
             
-            # 使用基本的OpenAI客户端调用，遵循api_test.py的工作模式
-            # 不使用额外参数，避免服务器错误
+            # Use basic OpenAI client call, following the working pattern from api_test.py
+            # Do not use extra parameters to avoid server errors
             response = self.client.chat.completions.create(
-                model=self.config["name"],
+                model=self._model_name,
                 messages=messages,
                 temperature=temperature,
             )
             
-            # 提取响应内容
+            # Extract response content
             content = response.choices[0].message.content
             
-            # 记录使用情况
+            # Log usage information
             if response.usage:
-                self.logger.debug(f"Token使用: 输入={response.usage.prompt_tokens}, "
-                                f"输出={response.usage.completion_tokens}, "
-                                f"总计={response.usage.total_tokens}")
+                self.logger.debug(f"Token usage: input={response.usage.prompt_tokens}, "
+                                f"output={response.usage.completion_tokens}, "
+                                f"total={response.usage.total_tokens}")
             
             return content
             
         except Exception as e:
-            self.logger.error(f"LLM调用失败: {e}")
+            self.logger.error(f"LLM call failed: {e}")
             raise
     
     def call_with_system_prompt(self, system_prompt: str, user_prompt: str, 
                                temperature: float = 0.3, 
                                max_tokens: Optional[int] = None) -> str:
         """
-        使用系统提示词和用户提示词调用LLM
-        
+        Call the LLM with a system prompt and user prompt
+
         Args:
-            system_prompt: 系统提示词
-            user_prompt: 用户提示词
-            temperature: 温度参数
-            max_tokens: 最大输出token数
-            
+            system_prompt: System prompt
+            user_prompt: User prompt
+            temperature: Temperature parameter
+            max_tokens: Maximum output token count
+
         Returns:
-            LLM响应的文本内容
+            Text content of the LLM response
         """
         messages = [
             {"role": "system", "content": system_prompt},
@@ -108,14 +114,14 @@ class LLMClient:
     @classmethod
     def from_se_config(cls, se_config: Dict[str, Any], use_operator_model: bool = False) -> "LLMClient":
         """
-        从SE框架配置创建LLM客户端
-        
+        Create an LLM client from SE framework configuration
+
         Args:
-            se_config: SE框架配置字典
-            use_operator_model: 是否使用operator_models配置而不是主模型配置
-            
+            se_config: SE framework configuration dictionary
+            use_operator_model: Whether to use operator_models config instead of the main model config
+
         Returns:
-            LLM客户端实例
+            LLM client instance
         """
         if use_operator_model and "operator_models" in se_config:
             model_config = se_config["operator_models"]
@@ -126,14 +132,14 @@ class LLMClient:
 
 
 class TrajectorySummarizer:
-    """专门用于轨迹总结的LLM客户端包装器"""
+    """LLM client wrapper specifically for trajectory summarization"""
     
     def __init__(self, llm_client: LLMClient):
         """
-        初始化轨迹总结器
-        
+        Initialize the trajectory summarizer
+
         Args:
-            llm_client: LLM客户端实例
+            llm_client: LLM client instance
         """
         self.llm_client = llm_client
         self.logger = get_se_logger("traj_summarizer", emoji="📊")
@@ -141,28 +147,28 @@ class TrajectorySummarizer:
     def summarize_trajectory(self, trajectory_content: str, patch_content: str, 
                            iteration: int) -> Dict[str, Any]:
         """
-        使用LLM总结轨迹内容
-        
+        Summarize trajectory content using LLM
+
         Args:
-            trajectory_content: .tra文件内容
-            patch_content: .patch/.pred文件内容 (预测结果)
-            iteration: 迭代次数
-            
+            trajectory_content: .tra file content
+            patch_content: .patch/.pred file content (prediction result)
+            iteration: Iteration number
+
         Returns:
-            轨迹总结字典
+            Trajectory summary dictionary
         """
         from .traj_summarizer import TrajSummarizer
         
         summarizer = TrajSummarizer()
         
         try:
-            # 获取提示词
+            # Get prompts
             system_prompt = summarizer.get_system_prompt()
             user_prompt = summarizer.format_user_prompt(trajectory_content, patch_content)
             
-            self.logger.info(f"开始LLM轨迹总结 (迭代{iteration})")
+            self.logger.info(f"Starting LLM trajectory summarization (iteration {iteration})")
             
-            # 调用LLM
+            # Call the LLM
             response = self.llm_client.call_with_system_prompt(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
@@ -170,18 +176,18 @@ class TrajectorySummarizer:
                 max_tokens=2000
             )
             
-            # 解析响应
+            # Parse the response
             summary = summarizer.parse_response(response)
             
-            # 验证响应格式
+            # Validate response format
             if summarizer.validate_response_format(summary):
-                self.logger.info(f"LLM轨迹总结成功 (迭代{iteration})")
+                self.logger.info(f"LLM trajectory summarization succeeded (iteration {iteration})")
                 return summary
             else:
-                self.logger.warning(f"LLM响应格式不符合预期，使用备用总结 (迭代{iteration})")
+                self.logger.warning(f"LLM response format does not meet expectations, using fallback summary (iteration {iteration})")
                 return summarizer.create_fallback_summary(trajectory_content, patch_content, iteration)
                 
         except Exception as e:
-            self.logger.error(f"LLM轨迹总结失败: {e}")
-            # 返回备用总结
+            self.logger.error(f"LLM trajectory summarization failed: {e}")
+            # Return fallback summary
             return summarizer.create_fallback_summary(trajectory_content, patch_content, iteration)

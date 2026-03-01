@@ -1,8 +1,8 @@
 """
-System Template Hook - 为特定实例动态加载自定义的system_template
+System Template Hook - Dynamically load custom system_template for specific instances
 
-提供基于实例ID的自定义系统提示词注入功能。
-从指定目录加载实例特定的YAML配置文件，动态修改agent的system_template。
+Provides custom system prompt injection based on instance ID.
+Loads instance-specific YAML configuration files from a specified directory to dynamically modify the agent's system_template.
 """
 
 import logging
@@ -42,33 +42,33 @@ class SystemTemplateHook(AbstractAgentHook):
         template_file = self.instance_templates_dir / f"{self.instance_id}.yaml"
         
         if not template_file.exists():
-            self.logger.info(f"没有找到实例 {self.instance_id} 的自定义模板文件: {template_file}")
+            self.logger.info(f"No custom template file found for instance {self.instance_id}: {template_file}")
             return
             
         try:
-            self.logger.info(f"正在加载实例 {self.instance_id} 的自定义模板: {template_file}")
+            self.logger.info(f"Loading custom template for instance {self.instance_id}: {template_file}")
             
             with open(template_file, 'r', encoding='utf-8') as f:
                 template_config = yaml.safe_load(f)
             
-            # 提取system_template
+            # Extract system_template
             system_template = self._extract_system_template(template_config)
             
             if system_template:
-                # 更新agent的system_template
+                # Update the agent's system_template
                 if hasattr(agent, 'templates') and hasattr(agent.templates, 'system_template'):
                     original_template = agent.templates.system_template
                     agent.templates.system_template = system_template
                     self.template_loaded = True
-                    self.logger.info(f"成功为实例 {self.instance_id} 应用自定义system_template")
-                    self.logger.debug(f"原始模板长度: {len(original_template)}, 新模板长度: {len(system_template)}")
+                    self.logger.info(f"Successfully applied custom system_template for instance {self.instance_id}")
+                    self.logger.debug(f"Original template length: {len(original_template)}, new template length: {len(system_template)}")
                 else:
-                    self.logger.warning(f"Agent没有templates.system_template属性，无法应用自定义模板")
+                    self.logger.warning(f"Agent does not have templates.system_template attribute, cannot apply custom template")
             else:
-                self.logger.warning(f"在模板文件中没有找到有效的system_template: {template_file}")
+                self.logger.warning(f"No valid system_template found in template file: {template_file}")
                 
         except Exception as e:
-            self.logger.error(f"加载实例 {self.instance_id} 的自定义模板时出错: {e}")
+            self.logger.error(f"Error loading custom template for instance {self.instance_id}: {e}")
     
     def _extract_system_template(self, config: Dict[str, Any]) -> str:
         """Extract system_template from loaded YAML configuration.
@@ -79,7 +79,7 @@ class SystemTemplateHook(AbstractAgentHook):
         Returns:
             The system_template string if found, empty string otherwise
         """
-        # 尝试多种可能的路径结构
+        # Try multiple possible path structures
         paths_to_try = [
             ["agent", "templates", "system_template"],
             ["templates", "system_template"], 
@@ -93,22 +93,24 @@ class SystemTemplateHook(AbstractAgentHook):
                 for key in path:
                     current = current[key]
                 if isinstance(current, str) and current.strip():
-                    self.logger.debug(f"在路径 {' -> '.join(path)} 找到system_template")
+                    self.logger.debug(f"Found system_template at path {' -> '.join(path)}")
                     return current.strip()
             except (KeyError, TypeError):
                 continue
         
-        self.logger.debug("在所有可能路径中都没有找到system_template")
+        self.logger.debug("No system_template found in any of the possible paths")
         return ""
     
-    def on_model_query(self, *, messages, instance_id: str, **kwargs) -> None:
+    def on_model_query(self, *, messages, agent: str = "", instance_id: str = None, **kwargs) -> None:
         """Called before model query. Log template usage if loaded.
             A test interface.
         
         Args:
             messages: The conversation messages
-            instance_id: The instance identifier
+            agent: The agent name
+            instance_id: The instance identifier (optional, falls back to self.instance_id)
             **kwargs: Additional arguments
         """
-        if self.template_loaded and len(messages) == 1:  # 只在第一次查询时记录
-            self.logger.info(f"实例 {self.instance_id} 正在使用自定义system_template")
+        if self.template_loaded and len(messages) == 1:  # Only log on the first query
+            _id = instance_id or self.instance_id
+            self.logger.info(f"Instance {_id} is using custom system_template")

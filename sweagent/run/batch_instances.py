@@ -451,11 +451,11 @@ class InstancesFromIdList(BaseModel, AbstractInstanceSource):
     def get_instance_configs(self) -> list[BatchInstance]:
         from datasets import load_dataset
 
-        # 确保文件路径是绝对路径
+        # Ensure the file path is absolute
         path = Path(self.path).resolve()
         logger.info(f"Loading instance IDs from {path}")
         
-        # 加载JSON文件中的实例ID列表
+        # Load the list of instance IDs from the JSON file
         try:
             if not path.exists():
                 msg = f"JSON file not found: {path}"
@@ -486,11 +486,11 @@ class InstancesFromIdList(BaseModel, AbstractInstanceSource):
             logger.error(msg)
             raise ValueError(msg)
 
-        # 创建正则表达式来匹配指定的实例ID
+        # Create a regex to match the specified instance IDs
         filter_regex = "|".join(instance_ids)
         logger.info(f"Created filter regex for {len(instance_ids)} instance IDs")
         
-        # 加载数据集
+        # Load the dataset
         dataset_path = self._get_dataset_path()
         logger.info(f"Loading dataset from {dataset_path}, split={self.split}")
         ds: list[dict[str, Any]] = load_dataset(dataset_path, split=self.split)  # type: ignore
@@ -499,19 +499,19 @@ class InstancesFromIdList(BaseModel, AbstractInstanceSource):
         if isinstance(self.deployment, DockerDeploymentConfig):
             self.deployment.platform = "linux/amd64"
 
-        # 创建所有实例
+        # Create all instances
         logger.info("Creating instances...")
         all_instances = [
             SimpleBatchInstance.from_swe_bench(instance).to_full_batch_instance(self.deployment) for instance in ds
         ]
         logger.info(f"Created {len(all_instances)} instances")
         
-        # 过滤实例
+        # Filter instances
         logger.info(f"Filtering instances with regex: {filter_regex[:100]}..." if len(filter_regex) > 100 else f"Filtering instances with regex: {filter_regex}")
         instances = _filter_batch_items(all_instances, filter_=filter_regex, shuffle=self.shuffle)
         logger.info(f"Found {len(instances)} matching instances")
         
-        # 检查是否找到了所有指定的实例
+        # Check if all specified instances were found
         found_ids = {instance.problem_statement.id for instance in instances}
         missing_ids = [id for id in instance_ids if id not in found_ids]
         

@@ -2,34 +2,34 @@ from openai import OpenAI
 import requests
 
 """
-API测试脚本 - 已修复版本
+API Test Script - Fixed Version
 
-注意：经测试发现，基本请求可以工作，但是额外参数（如chat_template_kwargs）
-会导致服务器错误："name 'base_url' is not defined"
+Note: Testing revealed that basic requests work, but extra parameters (such as chat_template_kwargs)
+cause a server error: "name 'base_url' is not defined"
 """
 
-# API配置
+# API configuration
 openai_api_key = "EMPTY"
 openai_api_base = "http://publicshare.a.pinggy.link"
 
-# 测试API连接
-print("测试API基本连接...")
+# Test API connection
+print("Testing basic API connection...")
 try:
     response = requests.get(openai_api_base)
-    print(f"API端点状态: {response.status_code}")
-    print(f"响应内容: {response.text[:100]}...")  # 只打印前100个字符
+    print(f"API endpoint status: {response.status_code}")
+    print(f"Response content: {response.text[:100]}...")  # Only print first 100 characters
 except Exception as e:
-    print(f"连接API端点失败: {e}")
+    print(f"Failed to connect to API endpoint: {e}")
 
-# 初始化客户端
+# Initialize client
 client = OpenAI(
     api_key=openai_api_key,
     base_url=openai_api_base,
 )
 
-# 尝试基本API请求（可行方式）
+# Try basic API request (working method)
 try:
-    print("\n尝试基本API请求...")
+    print("\nAttempting basic API request...")
     chat_response = client.chat.completions.create(
         model="openai/deepseek-chat",
         messages=[
@@ -37,17 +37,17 @@ try:
         ],
         temperature=0.6,
     )
-    print("响应成功!")
-    print(f"模型: {chat_response.model}")
-    print(f"内容: {chat_response.choices[0].message.content}")
-    print(f"使用的tokens: {chat_response.usage.total_tokens}")
+    print("Response successful!")
+    print(f"Model: {chat_response.model}")
+    print(f"Content: {chat_response.choices[0].message.content}")
+    print(f"Tokens used: {chat_response.usage.total_tokens}")
 except Exception as e:
-    print(f"请求失败: {e}")
+    print(f"Request failed: {e}")
 
-# 注意：下面的请求会导致服务器错误，因此被注释掉
+# Note: The request below causes a server error, so it has been commented out
 """
 try:
-    print("\n尝试带额外参数的请求（可能会失败）...")
+    print("\nAttempting request with extra parameters (may fail)...")
     chat_response = client.chat.completions.create(
         model="deepseek-chat",
         messages=[
@@ -56,10 +56,10 @@ try:
         temperature=0.6,
         top_p=0.95,
         extra_body={
-            "chat_template_kwargs": {"enable_thinking": True},  # 这个参数会导致服务器错误
+            "chat_template_kwargs": {"enable_thinking": True},  # This parameter causes a server error
         }, 
     )
-    print("响应成功:", chat_response)
+    print("Response successful:", chat_response)
 except Exception as e:
-    print(f"预期中的错误: {e}")
+    print(f"Expected error: {e}")
 """

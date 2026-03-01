@@ -4,9 +4,9 @@
 
 # 主模型配置 
 model:
-  name: "openai/deepseek-chat"
-  api_base: "http://publicshare.a.pinggy.link"
-  api_key: "EMPTY"
+  name: "openai/DeepSeek-V3.1"
+  api_base: "https://se-agent.services.ai.azure.com/models"
+  api_key: ""
   max_input_tokens: 128000
   max_output_tokens: 64000
   per_instance_cost_limit: 0
@@ -14,15 +14,15 @@ model:
 
 # 算子模型配置 (与主模型一致，但无cost limits)
 operator_models:
-  name: "openai/deepseek-chat"
-  api_base: "http://publicshare.a.pinggy.link"
-  api_key: "EMPTY"
+  name: "openai/DeepSeek-V3.1"
+  api_base: "https://se-agent.services.ai.azure.com/models"
+  api_key: ""
   max_input_tokens: 128000
   max_output_tokens: 64000
 
 # 实例配置
 instances:
-  json_file: "SE/instances/5.json"
+  json_file: "SE/instances/1.json"
   key: "unresolved"
   subset: "verified"
   split: "test"

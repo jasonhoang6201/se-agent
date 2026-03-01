@@ -3,88 +3,88 @@
 """
 SE Framework Trajectory Processor
 
-为SE框架提供轨迹文件处理功能，在每个iteration后生成简化的.tra文件。
-基于converter_old.py的逻辑，适配SE框架的目录结构。
+Provides trajectory file processing for the SE framework, generating simplified .tra files after each iteration.
+Based on converter_old.py logic, adapted to the SE framework directory structure.
 """
 
 import json
 import re
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-# 延迟导入避免循环导入问题
+# Lazy import to avoid circular import issues
 # from .se_logger import get_se_logger
 
 
 class TrajectoryProcessor:
-    """轨迹文件处理器，用于生成简化的.tra文件"""
-    
+    """Trajectory file processor for generating simplified .tra files"""
+
     def __init__(self):
-        """初始化轨迹处理器"""
-        # 延迟导入避免循环导入
+        """Initialize the trajectory processor"""
+        # Lazy import to avoid circular imports
         try:
             from .se_logger import get_se_logger
             self.logger = get_se_logger("trajectory_processor", emoji="🎬")
         except ImportError:
-            # 如果导入失败，使用标准日志
+            # If import fails, use standard logging
             import logging
             self.logger = logging.getLogger("trajectory_processor")
             self.logger.setLevel(logging.INFO)
     
     def _count_tokens(self, text: str) -> int:
-        """简单的token计数近似算法"""
+        """Simple approximate token counting algorithm"""
         if not text or not isinstance(text, str):
             return 0
-        # 基础token计数 - 按空白符和常见标点分割
+        # Basic token counting - split by whitespace and common punctuation
         tokens = re.findall(r'\b\w+\b', text.lower())
         return len(tokens)
     
     def _truncate_text(self, text: str, first_percent: float = 0.2, last_percent: float = 0.1) -> str:
         """
-        使用字符百分比约束截断文本内容
-        
+        Truncate text content using character percentage constraints
+
         Args:
-            text: 要截断的文本
-            first_percent: 保留开头的百分比（默认20%）
-            last_percent: 保留结尾的百分比（默认10%）
-            
+            text: Text to truncate
+            first_percent: Percentage to keep from the beginning (default 20%)
+            last_percent: Percentage to keep from the end (default 10%)
+
         Returns:
-            截断后的文本
+            Truncated text
         """
         if not text or not isinstance(text, str):
             return text
             
         text_length = len(text)
         
-        # 只对足够长的内容进行截断
+        # Only truncate content that is long enough
         if text_length < 300:
             return text
         
-        # 计算首部长度（20%，约束在30-150字符）
+        # Calculate head length (20%, constrained to 30-150 characters)
         first_length = int(text_length * first_percent)
         first_length = max(30, min(150, first_length))
         
-        # 计算尾部长度（10%，约束在30-100字符）
+        # Calculate tail length (10%, constrained to 30-100 characters)
         last_length = int(text_length * last_percent)
         last_length = max(30, min(100, last_length))
         
-        # 检查截断是否有意义（保留超过80%时不截断）
+        # Check if truncation is worthwhile (skip if keeping more than 80%)
         truncated_length = first_length + last_length + len("... [TRUNCATED] ...")
         if truncated_length >= text_length * 0.8:
             return text
             
-        # 提取首尾部分
+        # Extract head and tail parts
         first_part = text[:first_length]
         last_part = text[-last_length:]
         
-        # 组合截断标记
+        # Combine with truncation marker
         return f"{first_part}... [TRUNCATED] ...{last_part}"
     
     def _truncate_tool_content(self, content) -> str:
-        """截断工具输出内容"""
+        """Truncate tool output content"""
         if not content:
             return content
             
-        # 处理列表格式: [{"type": "text", "text": "..."}]
+        # Handle list format: [{"type": "text", "text": "..."}]
         if isinstance(content, list) and len(content) > 0:
             first_item = content[0]
             if isinstance(first_item, dict) and "text" in first_item:
@@ -92,7 +92,7 @@ class TrajectoryProcessor:
                 if isinstance(text_content, str):
                     return self._truncate_text(text_content)
         
-        # 处理字符串格式
+        # Handle string format
         if isinstance(content, str):
             return self._truncate_text(content)
         
@@ -100,24 +100,24 @@ class TrajectoryProcessor:
     
     def _create_tra_from_traj(self, traj_file: Path, tra_file: Path) -> Dict[str, int]:
         """
-        从.traj文件创建.tra文件，只保留history的role/content
-        
+        Create .tra file from .traj file, keeping only history role/content
+
         Args:
-            traj_file: 原始轨迹文件路径
-            tra_file: 目标.tra文件路径
-            
+            traj_file: Path to the original trajectory file
+            tra_file: Path to the target .tra file
+
         Returns:
-            处理统计信息字典
+            Processing statistics dictionary
         """
         try:
             with open(traj_file, 'r', encoding='utf-8') as f:
                 traj_data = json.load(f)
             
-            # 提取并简化history
+            # Extract and simplify history
             history = traj_data.get('history', [])
             simplified_history = []
             total_tokens = 0
-            original_tokens = 0  # 原始token数统计
+            original_tokens = 0  # Original token count
             
             for item in history:
                 if 'role' not in item:
@@ -127,24 +127,24 @@ class TrajectoryProcessor:
                     'role': item['role']
                 }
                 
-                # 首先统计原始内容的token数
+                # First count the tokens of the original content
                 for field in ['content', 'thought', 'action']:
                     if field in item and item[field]:
                         original_field_str = str(item[field]) if item[field] else ""
                         original_tokens += self._count_tokens(original_field_str)
                 
-                # 根据角色类型处理不同字段
+                # Process different fields based on role type
                 if item['role'] == 'assistant':
-                    # assistant角色：提取thought而非content
+                    # assistant role: extract thought instead of content
                     if 'thought' in item and item['thought']:
                         simplified_item['thought'] = item['thought']
                     
-                    # 包含action并应用截断
+                    # Include action and apply truncation
                     if 'action' in item and item['action']:
                         original_action = item['action']
                         action = original_action
                         
-                        # 对str_replace_editor或长action(>350字符)应用截断
+                        # Apply truncation to str_replace_editor or long actions (>350 chars)
                         if isinstance(action, str):
                             if 'str_replace_editor' in action or len(action) > 350:
                                 action = self._truncate_text(action)
@@ -156,37 +156,37 @@ class TrajectoryProcessor:
                         simplified_item['action'] = action
                         
                 else:
-                    # 非assistant角色：使用content
+                    # Non-assistant roles: use content
                     if 'content' in item and item['content']:
                         original_content = item['content']
                         content = original_content
                         
-                        # 对tool角色的长观察结果应用截断
+                        # Apply truncation to long observation results from tool role
                         if item['role'] == 'tool':
                             content = self._truncate_tool_content(content)
                         
                         simplified_item['content'] = content
                 
-                # 只添加有意义内容的项（不只是role）
+                # Only add items with meaningful content (not just role)
                 if len(simplified_item) > 1:
                     simplified_history.append(simplified_item)
                     
-                    # 统计压缩后字段的token数
+                    # Count tokens of compressed fields
                     for field in ['content', 'thought', 'action']:
                         if field in simplified_item:
                             field_str = str(simplified_item[field]) if simplified_item[field] else ""
                             total_tokens += self._count_tokens(field_str)
             
-            # 创建.tra文件内容
+            # Create .tra file content
             tra_data = {
                 'Trajectory': simplified_history
             }
             
-            # 写入.tra文件
+            # Write .tra file
             with open(tra_file, 'w', encoding='utf-8') as f:
                 json.dump(tra_data, f, indent=2)
             
-            # 计算节省的token数
+            # Calculate saved tokens
             saved_tokens = original_tokens - total_tokens
             compression_ratio = (saved_tokens / original_tokens * 100) if original_tokens > 0 else 0
             
@@ -199,7 +199,7 @@ class TrajectoryProcessor:
             }
             
         except Exception as e:
-            self.logger.error(f"创建.tra文件失败 {traj_file}: {e}")
+            self.logger.error(f"Failed to create .tra file {traj_file}: {e}")
             return {
                 'total_tokens': 0,
                 'original_tokens': 0,
@@ -210,20 +210,20 @@ class TrajectoryProcessor:
     
     def process_iteration_directory(self, iteration_dir: Path) -> Dict[str, Any]:
         """
-        处理单个iteration目录，为所有实例生成.tra文件
-        
+        Process a single iteration directory, generating .tra files for all instances
+
         Args:
-            iteration_dir: iteration目录路径（如iteration_1/）
-            
+            iteration_dir: Path to the iteration directory (e.g., iteration_1/)
+
         Returns:
-            处理结果统计信息
+            Processing result statistics
         """
-        self.logger.info(f"开始处理iteration目录: {iteration_dir}")
+        self.logger.info(f"Starting to process iteration directory: {iteration_dir}")
         
         if not iteration_dir.exists() or not iteration_dir.is_dir():
-            self.logger.warning(f"目录不存在或不是目录: {iteration_dir}")
+            self.logger.warning(f"Directory does not exist or is not a directory: {iteration_dir}")
             return {}
-        
+
         processing_stats = {
             'iteration_dir': str(iteration_dir),
             'processed_instances': [],
@@ -232,15 +232,15 @@ class TrajectoryProcessor:
             'failed_instances': []
         }
         
-        # 遍历所有实例目录
+        # Iterate over all instance directories
         for instance_dir in iteration_dir.iterdir():
             if not instance_dir.is_dir() or instance_dir.name.startswith('.'):
                 continue
-            
-            # 查找.traj文件
+
+            # Find .traj files
             traj_files = list(instance_dir.glob("*.traj"))
             if not traj_files:
-                self.logger.debug(f"实例 {instance_dir.name} 没有.traj文件")
+                self.logger.debug(f"Instance {instance_dir.name} has no .traj files")
                 continue
             
             instance_stats = {
@@ -250,11 +250,11 @@ class TrajectoryProcessor:
                 'total_history_items': 0
             }
             
-            # 处理每个.traj文件
+            # Process each .traj file
             for traj_file in traj_files:
                 tra_file = instance_dir / (traj_file.stem + '.tra')
                 
-                # 生成.tra文件
+                # Generate .tra file
                 file_stats = self._create_tra_from_traj(traj_file, tra_file)
                 
                 if file_stats['history_items'] > 0:
@@ -270,12 +270,12 @@ class TrajectoryProcessor:
                     instance_stats['total_tokens'] += file_stats['total_tokens']
                     instance_stats['total_history_items'] += file_stats['history_items']
                     
-                    # 更详细的日志记录，包含节省信息
-                    self.logger.info(f"已创建 {tra_file.name}: {file_stats['history_items']} 历史项, "
+                    # More detailed logging with savings info
+                    self.logger.info(f"Created {tra_file.name}: {file_stats['history_items']} history items, "
                                    f"{file_stats['total_tokens']} tokens "
-                                   f"(原始: {file_stats['original_tokens']}, "
-                                   f"节省: {file_stats['saved_tokens']}, "
-                                   f"压缩率: {file_stats['compression_ratio']:.1f}%)")
+                                   f"(original: {file_stats['original_tokens']}, "
+                                   f"saved: {file_stats['saved_tokens']}, "
+                                   f"compression ratio: {file_stats['compression_ratio']:.1f}%)")
                 else:
                     processing_stats['failed_instances'].append({
                         'instance_name': instance_dir.name,
@@ -288,33 +288,33 @@ class TrajectoryProcessor:
                 processing_stats['total_tokens'] += instance_stats['total_tokens']
                 processing_stats['total_tra_files'] += len(instance_stats['tra_files_created'])
                 
-                self.logger.info(f"实例 {instance_dir.name}: 创建了 "
-                               f"{len(instance_stats['tra_files_created'])} 个.tra文件")
+                self.logger.info(f"Instance {instance_dir.name}: created "
+                               f"{len(instance_stats['tra_files_created'])} .tra file(s)")
         
-        # 记录处理结果
-        self.logger.info(f"iteration处理完成: 创建了 {processing_stats['total_tra_files']} 个.tra文件, "
-                        f"总计 ~{processing_stats['total_tokens']} tokens")
-        
+        # Log processing results
+        self.logger.info(f"Iteration processing complete: created {processing_stats['total_tra_files']} .tra file(s), "
+                        f"total ~{processing_stats['total_tokens']} tokens")
+
         if processing_stats['failed_instances']:
-            self.logger.warning(f"失败的实例数: {len(processing_stats['failed_instances'])}")
+            self.logger.warning(f"Number of failed instances: {len(processing_stats['failed_instances'])}")
         
         return processing_stats
     
     def process_workspace_directory(self, workspace_dir: Path, target_iterations: Optional[List[int]] = None) -> Dict[str, Any]:
         """
-        处理整个workspace目录的所有iterations
-        
+        Process all iterations in the entire workspace directory
+
         Args:
-            workspace_dir: workspace目录路径
-            target_iterations: 指定要处理的iteration列表，None表示处理所有
-            
+            workspace_dir: Path to the workspace directory
+            target_iterations: List of specific iterations to process; None means process all
+
         Returns:
-            整体处理结果统计
+            Overall processing result statistics
         """
-        self.logger.info(f"开始处理workspace目录: {workspace_dir}")
+        self.logger.info(f"Starting to process workspace directory: {workspace_dir}")
         
         if not workspace_dir.exists() or not workspace_dir.is_dir():
-            self.logger.error(f"Workspace目录不存在: {workspace_dir}")
+            self.logger.error(f"Workspace directory does not exist: {workspace_dir}")
             return {}
         
         workspace_stats = {
@@ -325,7 +325,7 @@ class TrajectoryProcessor:
             'processing_errors': []
         }
         
-        # 查找所有iteration目录
+        # Find all iteration directories
         iteration_pattern = re.compile(r'^iteration_(\d+)$')
         iteration_dirs = []
         
@@ -337,14 +337,14 @@ class TrajectoryProcessor:
                     if target_iterations is None or iteration_num in target_iterations:
                         iteration_dirs.append((iteration_num, item))
         
-        # 按iteration号排序
+        # Sort by iteration number
         iteration_dirs.sort(key=lambda x: x[0])
         
         if not iteration_dirs:
-            self.logger.warning("未找到任何iteration目录")
+            self.logger.warning("No iteration directories found")
             return workspace_stats
         
-        # 处理每个iteration
+        # Process each iteration
         for iteration_num, iteration_dir in iteration_dirs:
             try:
                 iteration_stats = self.process_iteration_directory(iteration_dir)
@@ -362,94 +362,94 @@ class TrajectoryProcessor:
                     'error': str(e)
                 }
                 workspace_stats['processing_errors'].append(error_info)
-                self.logger.error(f"处理iteration_{iteration_num}时出错: {e}")
+                self.logger.error(f"Error processing iteration_{iteration_num}: {e}")
         
-        # 最终统计
+        # Final statistics
         processed_iterations = len(workspace_stats['iterations_processed'])
-        self.logger.info(f"Workspace处理完成: {processed_iterations} 个iteration, "
-                        f"{workspace_stats['total_tra_files']} 个.tra文件, "
+        self.logger.info(f"Workspace processing complete: {processed_iterations} iteration(s), "
+                        f"{workspace_stats['total_tra_files']} .tra file(s), "
                         f"~{workspace_stats['total_tokens']} tokens")
         
         return workspace_stats
     
     def extract_problem_from_tra(self, tra_file: Path, problem_file: Path) -> bool:
         """
-        从.tra文件中提取problem描述并保存为.problem文件
-        
+        Extract problem description from .tra file and save as .problem file
+
         Args:
-            tra_file: .tra文件路径
-            problem_file: 目标.problem文件路径
-            
+            tra_file: Path to the .tra file
+            problem_file: Path to the target .problem file
+
         Returns:
-            True表示成功提取，False表示失败
+            True if extraction succeeded, False otherwise
         """
         try:
             with open(tra_file, 'r', encoding='utf-8') as f:
                 tra_data = json.load(f)
             
-            # 定位到Trajectory[1]["content"][0]["text"]
+            # Locate Trajectory[1]["content"][0]["text"]
             trajectory = tra_data.get('Trajectory', [])
             if len(trajectory) < 2:
-                self.logger.warning(f"tra文件格式异常，trajectory长度不足: {tra_file}")
+                self.logger.warning(f"Abnormal tra file format, trajectory length insufficient: {tra_file}")
                 return False
             
             user_entry = trajectory[1]
             if user_entry.get('role') != 'user':
-                self.logger.warning(f"trajectory[1]不是user角色: {tra_file}")
+                self.logger.warning(f"trajectory[1] is not a user role: {tra_file}")
                 return False
             
             content = user_entry.get('content', [])
             if not isinstance(content, list) or len(content) == 0:
-                self.logger.warning(f"user content格式异常: {tra_file}")
+                self.logger.warning(f"Abnormal user content format: {tra_file}")
                 return False
             
             text_content = content[0].get('text', '')
             if not text_content:
-                self.logger.warning(f"未找到text内容: {tra_file}")
+                self.logger.warning(f"Text content not found: {tra_file}")
                 return False
             
-            # 使用正则提取<pr_description>标签中的内容
+            # Use regex to extract content from <pr_description> tags
             import re
             match = re.search(r'<pr_description>\s*(.*?)\s*</pr_description>', text_content, re.DOTALL)
             if not match:
-                self.logger.warning(f"未找到pr_description标签: {tra_file}")
+                self.logger.warning(f"pr_description tag not found: {tra_file}")
                 return False
             
             problem_description = match.group(1).strip()
             if not problem_description:
-                self.logger.warning(f"pr_description内容为空: {tra_file}")
+                self.logger.warning(f"pr_description content is empty: {tra_file}")
                 return False
             
-            # 写入.problem文件
+            # Write .problem file
             with open(problem_file, 'w', encoding='utf-8') as f:
                 f.write(problem_description)
             
-            # 统计信息
+            # Statistics
             problem_tokens = self._count_tokens(problem_description)
-            self.logger.info(f"已提取problem: {problem_file.name} ({problem_tokens} tokens)")
+            self.logger.info(f"Extracted problem: {problem_file.name} ({problem_tokens} tokens)")
             
             return True
             
         except Exception as e:
-            self.logger.error(f"提取problem失败 {tra_file}: {e}")
+            self.logger.error(f"Failed to extract problem {tra_file}: {e}")
             return False
     
     def process_problems_in_iteration(self, iteration_dir: Path) -> Dict[str, Any]:
         """
-        为iteration目录中的所有实例提取problem文件
-        
+        Extract problem files for all instances in an iteration directory
+
         Args:
-            iteration_dir: iteration目录路径
-            
+            iteration_dir: Path to the iteration directory
+
         Returns:
-            提取结果统计
+            Extraction result statistics
         """
-        self.logger.info(f"开始提取iteration目录的problems: {iteration_dir}")
+        self.logger.info(f"Starting to extract problems from iteration directory: {iteration_dir}")
         
         if not iteration_dir.exists() or not iteration_dir.is_dir():
-            self.logger.warning(f"目录不存在或不是目录: {iteration_dir}")
+            self.logger.warning(f"Directory does not exist or is not a directory: {iteration_dir}")
             return {}
-        
+
         problem_stats = {
             'iteration_dir': str(iteration_dir),
             'problems_extracted': [],
@@ -457,18 +457,18 @@ class TrajectoryProcessor:
             'failed_extractions': []
         }
         
-        # 遍历所有实例目录
+        # Iterate over all instance directories
         for instance_dir in iteration_dir.iterdir():
             if not instance_dir.is_dir() or instance_dir.name.startswith('.'):
                 continue
-            
-            # 查找.tra文件
+
+            # Find .tra files
             tra_files = list(instance_dir.glob("*.tra"))
             if not tra_files:
-                self.logger.debug(f"实例 {instance_dir.name} 没有.tra文件")
+                self.logger.debug(f"Instance {instance_dir.name} has no .tra files")
                 continue
-            
-            # 处理每个.tra文件（通常只有一个）
+
+            # Process each .tra file (usually only one)
             for tra_file in tra_files:
                 problem_file = instance_dir / (instance_dir.name + '.problem')
                 
@@ -488,22 +488,22 @@ class TrajectoryProcessor:
                         'reason': 'Problem extraction failed'
                     })
         
-        self.logger.info(f"problem提取完成: 成功 {problem_stats['total_problems']} 个, "
-                        f"失败 {len(problem_stats['failed_extractions'])} 个")
+        self.logger.info(f"Problem extraction complete: {problem_stats['total_problems']} succeeded, "
+                        f"{len(problem_stats['failed_extractions'])} failed")
         
         return problem_stats
 
 
 def process_trajectory_files(workspace_dir: str, iterations: Optional[List[int]] = None) -> Dict[str, Any]:
     """
-    便捷函数：处理轨迹文件
-    
+    Convenience function: process trajectory files
+
     Args:
-        workspace_dir: workspace目录路径
-        iterations: 要处理的iteration列表，None表示处理所有
-        
+        workspace_dir: Path to the workspace directory
+        iterations: List of iterations to process; None means process all
+
     Returns:
-        处理结果统计
+        Processing result statistics
     """
     processor = TrajectoryProcessor()
     return processor.process_workspace_directory(Path(workspace_dir), iterations)
@@ -511,14 +511,14 @@ def process_trajectory_files(workspace_dir: str, iterations: Optional[List[int]]
 
 def extract_problems_from_workspace(workspace_dir: str, iterations: Optional[List[int]] = None) -> Dict[str, Any]:
     """
-    便捷函数：从workspace提取problem文件
-    
+    Convenience function: extract problem files from workspace
+
     Args:
-        workspace_dir: workspace目录路径
-        iterations: 要处理的iteration列表，None表示处理所有
-        
+        workspace_dir: Path to the workspace directory
+        iterations: List of iterations to process; None means process all
+
     Returns:
-        提取结果统计
+        Extraction result statistics
     """
     import re
     
@@ -526,9 +526,9 @@ def extract_problems_from_workspace(workspace_dir: str, iterations: Optional[Lis
     workspace_path = Path(workspace_dir)
     
     if not workspace_path.exists():
-        return {'error': f'Workspace目录不存在: {workspace_path}'}
+        return {'error': f'Workspace directory does not exist: {workspace_path}'}
     
-    # 查找iteration目录
+    # Find iteration directories
     iteration_pattern = re.compile(r'^iteration_(\d+)$')
     iteration_dirs = []
     
@@ -562,15 +562,15 @@ def extract_problems_from_workspace(workspace_dir: str, iterations: Optional[Lis
     return workspace_results
 
 
-# 使用示例
+# Usage example
 if __name__ == "__main__":
-    # 示例：处理Demo_Structure目录
+    # Example: process Demo_Structure directory
     demo_workspace = "/home/uaih3k9x/630_swe/SE/trajectories/Demo_Structure"
     
     processor = TrajectoryProcessor()
     results = processor.process_workspace_directory(Path(demo_workspace))
     
-    print("处理结果:")
-    print(f"- 处理的iterations: {len(results['iterations_processed'])}")
-    print(f"- 创建的.tra文件: {results['total_tra_files']}")
-    print(f"- 总token数: ~{results['total_tokens']}")
+    print("Processing results:")
+    print(f"- Iterations processed: {len(results['iterations_processed'])}")
+    print(f"- .tra files created: {results['total_tra_files']}")
+    print(f"- Total tokens: ~{results['total_tokens']}")

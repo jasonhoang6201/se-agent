@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-轨迹数据提取器
-从SWE-agent输出目录中提取实例数据，使用统一的Instance数据管理接口
+Trajectory Data Extractor
+Extracts instance data from SWE-agent output directories using the unified Instance data management interface
 """
 
 from pathlib import Path
@@ -11,7 +11,7 @@ from core.utils.instance_data_manager import get_instance_data_manager, Instance
 
 
 class TrajExtractor:
-    """轨迹数据提取器 - 基于统一Instance数据管理"""
+    """Trajectory Data Extractor - Based on unified Instance data management"""
     
     def __init__(self):
         self.logger = get_se_logger("traj_extractor", emoji="📁")
@@ -19,23 +19,23 @@ class TrajExtractor:
     
     def extract_instance_data(self, iteration_dir: str) -> List[Tuple[str, Optional[str], str, str]]:
         """
-        从迭代目录中提取所有实例的数据
-        
+        Extract data for all instances from an iteration directory
+
         Args:
-            iteration_dir: 迭代目录路径
-            
+            iteration_dir: Path to the iteration directory
+
         Returns:
             List[Tuple[instance_name, problem_description, tra_content, patch_content]]
-            
+
         Note:
-            返回格式保持向后兼容，实际推荐使用extract_instances_structured()
+            Return format maintains backward compatibility; extract_instances_structured() is recommended
         """
         instances = self.instance_manager.get_iteration_instances(iteration_dir)
         results = []
         
         for instance in instances:
             if instance.tra_content:
-                # 如果有.tra文件，就包含这个实例（即使没有.patch文件）
+                # If .tra file exists, include this instance (even without .patch file)
                 patch_content = instance.patch_content or "FAILED_NO_PATCH"
                 results.append((
                     instance.instance_name,
@@ -44,33 +44,33 @@ class TrajExtractor:
                     patch_content
                 ))
             else:
-                # 没有.tra文件的实例才跳过
-                self.logger.warning(f"实例 {instance.instance_name} 缺少.tra文件，跳过")
+                # Only skip instances without .tra files
+                self.logger.warning(f"Instance {instance.instance_name} missing .tra file, skipping")
         
-        self.logger.info(f"从 {iteration_dir} 提取了 {len(results)} 个实例数据（包括失败实例）")
+        self.logger.info(f"Extracted {len(results)} instance data entries from {iteration_dir} (including failed instances)")
         return results
     
     def extract_instances_structured(self, iteration_dir: str) -> List[InstanceData]:
         """
-        推荐的新接口：提取结构化的实例数据
-        
+        Recommended new interface: extract structured instance data
+
         Args:
-            iteration_dir: 迭代目录路径
-            
+            iteration_dir: Path to the iteration directory
+
         Returns:
-            InstanceData对象列表
+            List of InstanceData objects
         """
         return self.instance_manager.get_iteration_instances(iteration_dir)
     
     def get_instance_completeness_report(self, iteration_dir: str) -> dict:
         """
-        生成迭代目录中所有实例的完整性报告
-        
+        Generate a completeness report for all instances in an iteration directory
+
         Args:
-            iteration_dir: 迭代目录路径
-            
+            iteration_dir: Path to the iteration directory
+
         Returns:
-            完整性报告字典
+            Completeness report dictionary
         """
         instances = self.instance_manager.get_iteration_instances(iteration_dir)
         
@@ -100,7 +100,7 @@ class TrajExtractor:
                     "score": validation["completeness_score"]
                 })
             
-            # 统计文件可用性
+            # Count file availability
             if validation["has_problem"]:
                 report["file_availability"]["problem"] += 1
             if validation["has_tra"]:

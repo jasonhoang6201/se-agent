@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """
-Claude API客户端
-提供与Anthropic Claude API交互的简单接口
-使用官方anthropic Python库
+Claude API Client
+Provides a simple interface for interacting with the Anthropic Claude API
+Uses the official anthropic Python library
 """
 
 import json
@@ -14,50 +14,50 @@ try:
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     ANTHROPIC_AVAILABLE = False
-    print("警告: 未找到anthropic库，请使用 pip install anthropic 进行安装")
+    print("Warning: anthropic library not found, please install with: pip install anthropic")
 
 class ClaudeAPI:
-    """Claude API客户端类"""
-    
+    """Claude API client class"""
+
     def __init__(self, api_key: str):
         """
-        初始化Claude API客户端
-        
+        Initialize the Claude API client
+
         Args:
-            api_key: Claude API密钥
+            api_key: Claude API key
         """
         if not ANTHROPIC_AVAILABLE:
-            raise ImportError("未安装anthropic库。请使用 pip install anthropic 安装")
-            
+            raise ImportError("anthropic library not installed. Please install with: pip install anthropic")
+
         self.api_key = api_key
         self.client = Anthropic(api_key=api_key)
-    
+
     def send_message(
-        self, 
-        message: str, 
+        self,
+        message: str,
         model: str = "claude-3-7-sonnet-20250219",
         temperature: float = 0.7,
         max_tokens: int = 1000,
         system: Optional[str] = None,
-        max_retries: int = 3,  # 额外的应用层重试
-        timeout: int = 60  # 超时设置，单位秒
+        max_retries: int = 3,  # Additional application-level retries
+        timeout: int = 60  # Timeout setting in seconds
     ) -> Dict[str, Any]:
         """
-        发送消息到Claude API
-        
+        Send a message to the Claude API
+
         Args:
-            message: 用户消息内容
-            model: 模型名称
-            temperature: 采样温度
-            max_tokens: 最大生成的token数
-            system: 系统提示
-            max_retries: 额外重试次数
-            timeout: 请求超时时间(秒)
-            
+            message: User message content
+            model: Model name
+            temperature: Sampling temperature
+            max_tokens: Maximum number of tokens to generate
+            system: System prompt
+            max_retries: Number of additional retries
+            timeout: Request timeout in seconds
+
         Returns:
-            API响应
+            API response
         """
-        # 使用应用层重试机制
+        # Use application-level retry mechanism
         for attempt in range(max_retries + 1):
             try:
                 kwargs = {
@@ -71,59 +71,59 @@ class ClaudeAPI:
                         }
                     ]
                 }
-                
+
                 if system:
                     kwargs["system"] = system
-                
-                # 调用Anthropic客户端
+
+                # Call Anthropic client
                 message_response = self.client.messages.create(**kwargs, timeout=timeout)
-                
-                # 转换为统一格式
+
+                # Convert to unified format
                 return {
                     "id": message_response.id,
                     "model": message_response.model,
                     "content": message_response.content
                 }
-            
+
             except Exception as e:
-                print(f"API请求失败 (尝试 {attempt+1}/{max_retries+1}): {e}")
-                
+                print(f"API request failed (attempt {attempt+1}/{max_retries+1}): {e}")
+
                 if attempt < max_retries:
-                    wait_time = 2 ** attempt  # 指数退避
-                    print(f"等待 {wait_time} 秒后重试...")
+                    wait_time = 2 ** attempt  # Exponential backoff
+                    print(f"Waiting {wait_time} seconds before retrying...")
                     time.sleep(wait_time)
                 else:
                     return {"error": str(e)}
 
 def extract_content(response: Dict[str, Any]) -> str:
     """
-    从Claude API响应中提取文本内容
-    
+    Extract text content from a Claude API response
+
     Args:
-        response: Claude API响应
-        
+        response: Claude API response
+
     Returns:
-        提取的文本内容
+        Extracted text content
     """
     if "error" in response:
-        return f"错误: {response['error']}"
-    
+        return f"Error: {response['error']}"
+
     if "content" not in response:
-        return "错误: 响应中未找到content字段"
-    
+        return "Error: content field not found in response"
+
     content_blocks = response["content"]
-    
+
     if not content_blocks:
         return ""
-    
-    # 处理内容块
+
+    # Process content blocks
     extracted_text = ""
     for block in content_blocks:
-        # 如果是TextBlock对象（anthropic库的响应格式）
+        # If it's a TextBlock object (anthropic library response format)
         if hasattr(block, 'text'):
             extracted_text += block.text
-        # 如果是字典（我们自己转换的格式）
+        # If it's a dictionary (our own converted format)
         elif isinstance(block, dict) and block.get("type") == "text":
             extracted_text += block.get("text", "")
-    
+
     return extracted_text

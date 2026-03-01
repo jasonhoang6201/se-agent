@@ -11,12 +11,12 @@ logging.basicConfig(
 )
 
 def step_count_filter(traj: Dict, min_steps: int = 3, max_steps: int = 30) -> bool:
-    """过滤轨迹步数是否在合理范围内"""
+    """Filter whether trajectory step count is within a reasonable range"""
     steps = traj.get('steps', [])
     return min_steps <= len(steps) <= max_steps
 
 def has_long_repetition(traj: Dict, max_repeat: int = 3) -> bool:
-    """判断轨迹中是否有连续重复内容"""
+    """Determine whether the trajectory contains consecutive repeated content"""
     steps = traj.get('steps', [])
     last_content = None
     repeat_count = 1
@@ -32,11 +32,11 @@ def has_long_repetition(traj: Dict, max_repeat: int = 3) -> bool:
     return False
 
 def code_edit_ratio(traj: Dict, min_ratio: float = 0.2) -> bool:
-    """判断轨迹中涉及代码编辑的步数比例是否达标"""
+    """Determine whether the ratio of code editing steps meets the threshold"""
     steps = traj.get('steps', [])
     if not steps:
         return False
-    edit_keywords = [k.lower() for k in ['edit', '修改', 'change', 'patch', 'diff', 'apply', '替换', '重写', 'fix', '修复']]
+    edit_keywords = [k.lower() for k in ['edit', 'change', 'patch', 'diff', 'apply', 'rewrite', 'fix']]
     edit_count = sum(
         any(k in step.get('content', '').lower() for k in edit_keywords)
         for step in steps
@@ -44,11 +44,11 @@ def code_edit_ratio(traj: Dict, min_ratio: float = 0.2) -> bool:
     return (edit_count / len(steps)) >= min_ratio
 
 def filter_non_empty(trajectories: List[Dict]) -> List[Dict]:
-    """过滤空内容"""
+    """Filter out empty content"""
     return [t for t in trajectories if t.get('content', '').strip()]
 
 def filter_unique(trajectories: List[Dict]) -> List[Dict]:
-    """内容去重"""
+    """Deduplicate content"""
     seen = set()
     unique_trajs = []
     for traj in trajectories:
@@ -59,31 +59,31 @@ def filter_unique(trajectories: List[Dict]) -> List[Dict]:
     return unique_trajs
 
 def filter_length(trajectories: List[Dict], min_len: int = 10) -> List[Dict]:
-    """过滤内容过短的轨迹"""
+    """Filter out trajectories with content that is too short"""
     return [t for t in trajectories if len(t.get('content', '').strip()) >= min_len]
 
 def filter_bad_keywords(trajectories: List[Dict]) -> List[Dict]:
-    """过滤包含负面关键词的轨迹"""
-    bad_keywords = ['无法解决', 'error', 'not supported', '抱歉', "i don't know", '不知道', '失败', '未能', '不能', '无法', 'unsolved']
+    """Filter out trajectories containing negative keywords"""
+    bad_keywords = ['cannot solve', 'error', 'not supported', 'sorry', "i don't know", 'failed', 'unable to', 'cannot', 'unsolved']
     def is_bad(traj):
         content = traj.get('content', '').lower()
         return any(k in content for k in bad_keywords)
     return [t for t in trajectories if not is_bad(t)]
 
 def filter_step_count(trajectories: List[Dict]) -> List[Dict]:
-    """过滤步数不合理的轨迹"""
+    """Filter out trajectories with unreasonable step counts"""
     return [t for t in trajectories if step_count_filter(t)]
 
 def filter_long_repetition(trajectories: List[Dict]) -> List[Dict]:
-    """过滤有长重复的轨迹"""
+    """Filter out trajectories with long repetitions"""
     return [t for t in trajectories if not has_long_repetition(t)]
 
 def filter_code_edit_ratio(trajectories: List[Dict]) -> List[Dict]:
-    """过滤代码编辑比例不达标的轨迹"""
+    """Filter out trajectories that do not meet the code edit ratio threshold"""
     return [t for t in trajectories if code_edit_ratio(t)]
 
 def filter_trajectories(trajectories: List[Dict]) -> List[Dict]:
-    """多步过滤轨迹，返回有效轨迹列表"""
+    """Multi-step trajectory filtering, returns a list of valid trajectories"""
     filtered = filter_non_empty(trajectories)
     filtered = filter_unique(filtered)
     filtered = filter_length(filtered)
@@ -95,7 +95,7 @@ def filter_trajectories(trajectories: List[Dict]) -> List[Dict]:
 
 
 def deepseek_r1_select(problem_statement: str, trajectories: list) -> int:
-    """调用 DeepSeek R1 API 选择最优轨迹，返回索引"""
+    """Call DeepSeek R1 API to select the best trajectory, returns index"""
     prompt = (
         "You are an expert agent evaluator. Given a problem statement and several agent trajectories, "
         "your task is to select the trajectory that best solves the problem.\n\n"
@@ -112,8 +112,8 @@ def deepseek_r1_select(problem_statement: str, trajectories: list) -> int:
 
     api_key = os.environ.get("DEEPSEEK_API_KEY")
     if not api_key or api_key == "YOUR_API_KEY":
-        logging.error("未设置DEEPSEEK_API_KEY环境变量，无法调用DeepSeek API。请设置正确的API Key。")
-        raise RuntimeError("DEEPSEEK_API_KEY未设置")
+        logging.error("DEEPSEEK_API_KEY environment variable is not set. Unable to call DeepSeek API. Please set a valid API Key.")
+        raise RuntimeError("DEEPSEEK_API_KEY is not set")
     url = "https://api.deepseek.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -132,40 +132,40 @@ def deepseek_r1_select(problem_statement: str, trajectories: list) -> int:
         response = requests.post(url, headers=headers, json=payload, timeout=60)
         response.raise_for_status()
         result = response.json()
-        # 更健壮的返回格式判定
+        # More robust response format validation
         if not (isinstance(result, dict) and 'choices' in result and result['choices'] and 'message' in result['choices'][0] and 'content' in result['choices'][0]['message']):
-            logging.error(f"API返回格式异常: {result}")
+            logging.error(f"Unexpected API response format: {result}")
             return 0
         reply = result['choices'][0]['message']['content'].strip()
         match = re.match(r"^\s*(\d+)\s*$", reply)
         if match:
             idx = int(match.group(1))
         else:
-            logging.warning(f"未能从回复中提取独立数字，回复内容: {reply}")
+            logging.warning(f"Unable to extract a standalone number from reply, reply content: {reply}")
             idx = 0
     except Exception as e:
-        logging.error(f"调用DeepSeek R1 API失败: {e}")
+        logging.error(f"Failed to call DeepSeek R1 API: {e}")
         idx = 0
     return idx
 
 
 def select_best_trajectory(problem_statement: str, trajectories: List[Dict]) -> Optional[Dict]:
-    """过滤并选择最优轨迹，返回最佳轨迹字典或None"""
+    """Filter and select the best trajectory, returns the best trajectory dict or None"""
     filtered_trajectories = filter_trajectories(trajectories)
     contents = [traj.get('content', '') for traj in filtered_trajectories]
     if not contents:
-        logging.info("过滤后无有效轨迹，返回None。")
+        logging.info("No valid trajectories after filtering, returning None.")
         return None
     best_idx = deepseek_r1_select(problem_statement, contents)
     if 0 <= best_idx < len(filtered_trajectories):
         return filtered_trajectories[best_idx]
     else:
-        logging.warning(f"best_idx超出范围: {best_idx}, 轨迹数量: {len(filtered_trajectories)}，返回None。")
+        logging.warning(f"best_idx out of range: {best_idx}, number of trajectories: {len(filtered_trajectories)}, returning None.")
         return None
 
 
 def process_file(input_path: str, output_path: str):
-    """批量处理文件，逐行选择最优轨迹"""
+    """Batch process file, selecting the best trajectory for each line"""
     with open(input_path, 'r', encoding='utf-8') as fin, \
          open(output_path, 'w', encoding='utf-8') as fout:
         for lineno, line in enumerate(fin, 1):
@@ -181,26 +181,26 @@ def process_file(input_path: str, output_path: str):
                 else:
                     data['best_trajectory'] = best_traj
                 fout.write(json.dumps(data, ensure_ascii=False) + '\n')
-                # 每10行flush一次，提升效率
+                # Flush every 10 lines for efficiency
                 if lineno % 10 == 0:
                     fout.flush()
             except Exception as e:
-                logging.error(f"第{lineno}行处理失败: {e}，内容: {line.strip()}")
+                logging.error(f"Failed to process line {lineno}: {e}, content: {line.strip()}")
                 continue
         fout.flush()
 
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description='基于DeepSeek R1选择最优轨迹')
-    parser.add_argument('--input', type=str, default='input.jsonl', help='输入文件路径')
-    parser.add_argument('--output', type=str, default='output.jsonl', help='输出文件路径')
+    parser = argparse.ArgumentParser(description='Select best trajectory based on DeepSeek R1')
+    parser.add_argument('--input', type=str, default='input.jsonl', help='Input file path')
+    parser.add_argument('--output', type=str, default='output.jsonl', help='Output file path')
     args = parser.parse_args()
     if not os.path.exists(args.input):
-        logging.error(f"输入文件不存在: {args.input}")
+        logging.error(f"Input file does not exist: {args.input}")
         exit(1)
-    # 启动前检查API Key
+    # Check API Key before starting
     if not os.environ.get("DEEPSEEK_API_KEY"):
-        logging.error("未检测到DEEPSEEK_API_KEY环境变量，程序终止。")
+        logging.error("DEEPSEEK_API_KEY environment variable not detected, program terminated.")
         exit(1)
     process_file(args.input, args.output)

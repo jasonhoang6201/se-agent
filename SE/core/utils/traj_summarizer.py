@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-轨迹总结器
-为trajectory pool生成轨迹总结的专用prompt系统
+Trajectory Summarizer
+Dedicated prompt system for generating trajectory summaries for the trajectory pool
 """
 
 import json
@@ -10,17 +10,17 @@ from core.utils.se_logger import get_se_logger
 
 
 class TrajSummarizer:
-    """轨迹总结器，生成轨迹分析prompt并解析响应"""
+    """Trajectory summarizer that generates trajectory analysis prompts and parses responses"""
     
     def __init__(self):
         self.logger = get_se_logger("traj_summarizer", emoji="📊")
     
     def get_system_prompt(self) -> str:
         """
-        获取系统提示词
-        
+        Get the system prompt
+
         Returns:
-            系统提示词字符串
+            System prompt string
         """
         return """You are an AI assistant specialized in analyzing software engineering trajectories. Your task is to analyze execution trajectories from SWE-agent runs and provide structured insights about the solution approach.
 
@@ -45,10 +45,10 @@ Focus on extracting actionable insights about the solution methodology rather th
 
     def get_user_prompt_template(self) -> str:
         """
-        获取用户提示词模板
-        
+        Get the user prompt template
+
         Returns:
-            用户提示词模板字符串
+            User prompt template string
         """
         return """Please analyze the following SWE-agent trajectory and provide insights about the solution approach.
 
@@ -62,14 +62,14 @@ Please provide your analysis in the JSON format specified in the system prompt."
 
     def format_user_prompt(self, trajectory_content: str, patch_content: str) -> str:
         """
-        格式化用户提示词
-        
+        Format the user prompt
+
         Args:
-            trajectory_content: 轨迹文件内容
-            patch_content: 预测文件内容 (.patch/.pred)
-            
+            trajectory_content: Trajectory file content
+            patch_content: Prediction file content (.patch/.pred)
+
         Returns:
-            格式化后的用户提示词
+            Formatted user prompt
         """
         template = self.get_user_prompt_template()
         return template.format(
@@ -79,20 +79,20 @@ Please provide your analysis in the JSON format specified in the system prompt."
     
     def parse_response(self, response_content: str) -> Dict[str, Any]:
         """
-        解析LLM响应内容
-        
+        Parse LLM response content
+
         Args:
-            response_content: LLM响应的原始内容
-            
+            response_content: Raw content of the LLM response
+
         Returns:
-            解析后的JSON数据，如果解析失败返回错误信息
+            Parsed JSON data, or error information if parsing fails
         """
         try:
-            # 尝试直接解析JSON
+            # Try to parse JSON directly
             if response_content.strip().startswith('{'):
                 return json.loads(response_content.strip())
             
-            # 如果不是直接的JSON，尝试提取JSON部分
+            # If not direct JSON, try to extract the JSON portion
             start_idx = response_content.find('{')
             end_idx = response_content.rfind('}') + 1
             
@@ -100,29 +100,29 @@ Please provide your analysis in the JSON format specified in the system prompt."
                 json_content = response_content[start_idx:end_idx]
                 return json.loads(json_content)
             else:
-                self.logger.warning("无法在响应中找到JSON格式内容")
+                self.logger.warning("Unable to find JSON formatted content in response")
                 return {
-                    "error": "无法解析JSON",
+                    "error": "Unable to parse JSON",
                     "raw_content": response_content[:500] + "..." if len(response_content) > 500 else response_content
                 }
                 
         except json.JSONDecodeError as e:
-            self.logger.error(f"JSON解析错误: {e}")
+            self.logger.error(f"JSON parsing error: {e}")
             return {
-                "error": "JSON解析错误", 
+                "error": "JSON parsing error", 
                 "details": str(e),
                 "raw_content": response_content[:500] + "..." if len(response_content) > 500 else response_content
             }
     
     def validate_response_format(self, response_data: Dict[str, Any]) -> bool:
         """
-        验证响应格式是否符合预期
-        
+        Validate whether the response format meets expectations
+
         Args:
-            response_data: 解析后的响应数据
-            
+            response_data: Parsed response data
+
         Returns:
-            是否符合预期格式
+            Whether the format meets expectations
         """
         required_fields = [
             "approach_summary",
@@ -136,31 +136,31 @@ Please provide your analysis in the JSON format specified in the system prompt."
             "components_touched"
         ]
         
-        # 检查是否有错误字段
+        # Check if there is an error field
         if "error" in response_data:
             return False
         
-        # 检查必需字段
+        # Check required fields
         missing_fields = [field for field in required_fields if field not in response_data]
         if missing_fields:
-            self.logger.warning(f"响应缺少必需字段: {missing_fields}")
+            self.logger.warning(f"Response is missing required fields: {missing_fields}")
             return False
         
         return True
     
     def create_fallback_summary(self, trajectory_content: str, patch_content: str, iteration: int) -> Dict[str, Any]:
         """
-        创建备用总结（当LLM调用失败时使用）
-        
+        Create a fallback summary (used when LLM call fails)
+
         Args:
-            trajectory_content: 轨迹内容
-            patch_content: 预测内容 (.patch/.pred)
-            iteration: 迭代次数
-            
+            trajectory_content: Trajectory content
+            patch_content: Prediction content (.patch/.pred)
+            iteration: Iteration number
+
         Returns:
-            备用总结数据
+            Fallback summary data
         """
-        # 简单的备用分析
+        # Simple fallback analysis
         trajectory_length = len(trajectory_content.split('\n')) if trajectory_content else 0
         patch_length = len(patch_content) if patch_content else 0
         
