@@ -1,0 +1,45 @@
+diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py
+index c279f35f8..ce341ccf6 100644
+--- a/astropy/timeseries/core.py
++++ b/astropy/timeseries/core.py
+@@ -68,14 +68,23 @@ class BaseTimeSeries(QTable):
+ 
+             plural = 's' if len(required_columns) > 1 else ''
+ 
++            # First check if all required columns are present
++            missing_columns = [col for col in required_columns if col not in self.colnames]
++            if missing_columns:
++                if len(missing_columns) == 1:
++                    raise ValueError("{} object is invalid - required column '{}' is missing"
++                                     .format(self.__class__.__name__, missing_columns[0]))
++                else:
++                    raise ValueError("{} object is invalid - required columns {} are missing"
++                                     .format(self.__class__.__name__, missing_columns))
++
++            # Then check if they're in the correct order
+             if not self._required_columns_relax and len(self.colnames) == 0:
+-
+                 raise ValueError("{} object is invalid - expected '{}' "
+                                  "as the first column{} but time series has no columns"
+                                  .format(self.__class__.__name__, required_columns[0], plural))
+ 
+             elif self.colnames[:len(required_columns)] != required_columns:
+-
+                 raise ValueError("{} object is invalid - expected '{}' "
+                                  "as the first column{} but found '{}'"
+                                  .format(self.__class__.__name__, required_columns[0], plural, self.colnames[0]))
+diff --git a/reproduce_error.py b/reproduce_error.py
+new file mode 100644
+index 000000000..03d6e4d97
+--- /dev/null
++++ b/reproduce_error.py
+@@ -0,0 +1,8 @@
++import numpy as np
++from astropy.time import Time
++from astropy.timeseries import TimeSeries
++
++time = Time(np.arange(100000, 100003), format='jd')
++ts = TimeSeries(time=time, data={"flux": [99.9, 99.8, 99.7]})
++ts._required_columns = ["time", "flux"]
++ts.remove_column("flux")
+\ No newline at end of file

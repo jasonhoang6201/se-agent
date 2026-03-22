@@ -1,0 +1,37 @@
+diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py
+index c279f35f8..f0b739482 100644
+--- a/astropy/timeseries/core.py
++++ b/astropy/timeseries/core.py
+@@ -74,12 +74,17 @@ class BaseTimeSeries(QTable):
+                                  "as the first column{} but time series has no columns"
+                                  .format(self.__class__.__name__, required_columns[0], plural))
+ 
+-            elif self.colnames[:len(required_columns)] != required_columns:
++            elif self.colnames[0] != required_columns[0]:
+ 
+                 raise ValueError("{} object is invalid - expected '{}' "
+                                  "as the first column{} but found '{}'"
+                                  .format(self.__class__.__name__, required_columns[0], plural, self.colnames[0]))
+ 
++            elif not all(col in self.colnames for col in required_columns):
++                missing_columns = [col for col in required_columns if col not in self.colnames]
++                raise ValueError("{} object is missing required column{}: {}"
++                                 .format(self.__class__.__name__, 's' if len(missing_columns) > 1 else '', ', '.join(missing_columns)))
++
+             if (self._required_columns_relax
+                     and self._required_columns == self.colnames[:len(self._required_columns)]):
+                 self._required_columns_relax = False
+diff --git a/reproduce_error.py b/reproduce_error.py
+new file mode 100644
+index 000000000..5280a9514
+--- /dev/null
++++ b/reproduce_error.py
+@@ -0,0 +1,8 @@
++import numpy as np
++from astropy.time import Time
++from astropy.timeseries import TimeSeries
++
++time=Time(np.arange(100000, 100003), format="jd")
++ts = TimeSeries(time=time, data={"flux": [99.9, 99.8, 99.7]})
++ts._required_columns = ["time", "flux"]
++ts.remove_column("flux")
