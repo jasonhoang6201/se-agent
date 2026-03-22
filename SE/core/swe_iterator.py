@@ -8,11 +8,53 @@ with configurable parameters loaded from YAML config files.
 """
 
 import json
+import os
+import shutil
+import subprocess
 import sys
-import yaml
 import argparse
 from pathlib import Path
 from typing import Dict, Any, Optional
+
+
+_BOOTSTRAP_ENV_VAR = "SE_AGENT_BOOTSTRAPPED"
+
+
+def _bootstrap_project_environment() -> None:
+    """Ensure the project dependencies are available before importing yaml."""
+    import_error = None
+    try:
+        import yaml  # noqa: F401
+
+        return
+    except ModuleNotFoundError as exc:
+        if exc.name != "yaml":
+            raise
+        import_error = exc
+
+    if os.environ.get(_BOOTSTRAP_ENV_VAR) == "1":
+        raise ModuleNotFoundError(
+            "PyYAML is not installed in the active Python environment. "
+            "Run `uv sync` and then retry with `uv run python SE/core/swe_iterator.py ...`."
+        ) from import_error
+
+    uv_executable = shutil.which("uv")
+    if uv_executable is None:
+        raise ModuleNotFoundError(
+            "PyYAML is not installed in the active Python environment and `uv` was not found. "
+            "Install the project dependencies or run the script through the project environment."
+        ) from import_error
+
+    env = os.environ.copy()
+    env[_BOOTSTRAP_ENV_VAR] = "1"
+    command = [uv_executable, "run", "python", str(Path(__file__).resolve()), *sys.argv[1:]]
+    completed = subprocess.run(command, env=env)
+    raise SystemExit(completed.returncode)
+
+
+_bootstrap_project_environment()
+
+import yaml
 
 from sweagent.run.run_batch import RunBatchConfig, RunBatch
 from sweagent.utils.config import load_environment_variables
