@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SE-Agent: Phân tích luồng chạy</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f1117; color: #e2e8f0; }
+
+  /* Header */
+  .header { background: linear-gradient(135deg, #1a1f2e 0%, #0f1117 100%); border-bottom: 1px solid #2d3748; padding: 24px 32px; }
+  .header h1 { font-size: 22px; font-weight: 700; color: #fff; }
+  .header p { font-size: 13px; color: #718096; margin-top: 4px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 8px; }
+  .badge-paper { background: #1e3a5f; color: #63b3ed; }
+  .badge-code { background: #1a3a2a; color: #68d391; }
+  .badge-todo { background: #3d1f0a; color: #f6ad55; }
+
+  /* Tabs */
+  .tabs { display: flex; background: #1a1f2e; border-bottom: 1px solid #2d3748; overflow-x: auto; }
+  .tab { padding: 12px 20px; cursor: pointer; font-size: 13px; color: #718096; white-space: nowrap; border-bottom: 2px solid transparent; transition: all .2s; }
+  .tab.active { color: #63b3ed; border-bottom-color: #63b3ed; background: #0f1117; }
+  .tab:hover:not(.active) { color: #a0aec0; }
+
+  /* Content */
+  .content { padding: 24px 32px; max-width: 1400px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Flow diagram */
+  .flow-container { overflow-x: auto; }
+  .flow-diagram { min-width: 900px; }
+
+  /* Boxes in diagram */
+  .flow-row { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+  .flow-box { border-radius: 8px; padding: 10px 14px; font-size: 12px; border: 1px solid; position: relative; }
+  .box-input { background: #1e2d40; border-color: #2b6cb0; }
+  .box-planning { background: #1a3a2a; border-color: #276749; }
+  .box-operator { background: #2d1b4e; border-color: #553c9a; }
+  .box-paper-only { background: #3d2a0a; border-color: #7b4f12; }
+  .box-output { background: #1a2634; border-color: #2c5282; }
+  .box-eval { background: #1a1a2e; border-color: #44337a; }
+  .box-todo { background: #1a0a0a; border-color: #742a2a; }
+
+  .box-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .box-title { font-size: 13px; font-weight: 600; color: #fff; }
+  .box-sub { font-size: 11px; color: #a0aec0; margin-top: 3px; }
+
+  .arrow { color: #4a5568; font-size: 18px; flex-shrink: 0; }
+  .arrow-down { text-align: center; color: #4a5568; font-size: 16px; margin: 4px 0; }
+
+  /* Code blocks */
+  .code-block { background: #0d1117; border: 1px solid #2d3748; border-radius: 8px; overflow: hidden; margin: 16px 0; }
+  .code-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; background: #161b22; border-bottom: 1px solid #2d3748; }
+  .code-filename { font-size: 12px; color: #58a6ff; font-weight: 600; }
+  .code-desc { font-size: 11px; color: #6e7681; }
+  .code-body { padding: 14px; overflow-x: auto; font-family: 'Fira Code', 'Consolas', monospace; font-size: 12px; line-height: 1.6; white-space: pre; color: #e2e8f0; max-height: 360px; overflow-y: auto; }
+
+  /* Q&A sections */
+  .qa-card { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 10px; padding: 20px; margin: 16px 0; }
+  .qa-question { font-size: 15px; font-weight: 700; color: #63b3ed; margin-bottom: 14px; border-left: 3px solid #63b3ed; padding-left: 12px; }
+  .qa-section { margin: 12px 0; }
+  .qa-section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .title-paper { color: #f6ad55; }
+  .title-code { color: #68d391; }
+  .title-gap { color: #fc8181; }
+  .qa-text { font-size: 13px; color: #a0aec0; line-height: 1.7; }
+  .qa-highlight { background: #2d3748; border-left: 3px solid #4a5568; padding: 8px 12px; border-radius: 0 6px 6px 0; margin: 8px 0; font-family: monospace; font-size: 12px; color: #e2e8f0; }
+  .tag-paper { background: #1e3a5f; color: #63b3ed; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+  .tag-code { background: #1a3a2a; color: #68d391; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+  .tag-todo { background: #3d1f0a; color: #f6ad55; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+
+  /* Legend */
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #a0aec0; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+
+  /* Section title */
+  .section-title { font-size: 18px; font-weight: 700; color: #fff; margin: 0 0 8px 0; }
+  .section-sub { font-size: 13px; color: #718096; margin-bottom: 20px; }
+
+  /* Step grid */
+  .steps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 16px 0; }
+  .step-card { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 8px; padding: 14px; }
+  .step-num { font-size: 11px; color: #718096; margin-bottom: 6px; }
+  .step-title { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 6px; }
+  .step-desc { font-size: 12px; color: #a0aec0; line-height: 1.5; }
+  .step-file { font-size: 11px; color: #4299e1; margin-top: 6px; font-family: monospace; }
+
+  /* Alert box */
+  .alert { border-radius: 8px; padding: 12px 16px; margin: 12px 0; font-size: 13px; line-height: 1.6; }
+  .alert-warn { background: #2d1e00; border: 1px solid #7b4f12; color: #f6ad55; }
+  .alert-info { background: #0a1929; border: 1px solid #0d47a1; color: #63b3ed; }
+  .alert-danger { background: #1a0000; border: 1px solid #742a2a; color: #fc8181; }
+
+  /* Divider */
+  .divider { border: none; border-top: 1px solid #2d3748; margin: 20px 0; }
+
+  /* Two col */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* File tabs */
+  .file-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: -1px; }
+  .file-tab { padding: 6px 12px; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 12px; background: #161b22; border: 1px solid #2d3748; border-bottom: none; color: #718096; }
+  .file-tab.active { background: #0d1117; color: #58a6ff; border-color: #2d3748; }
+  .file-panels { border: 1px solid #2d3748; border-radius: 0 8px 8px 8px; }
+  .file-panel { display: none; }
+  .file-panel.active { display: block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>SE-Agent — Phân tích luồng chạy đầy đủ
+    <span class="badge badge-paper">Paper (lý thuyết)</span>
+    <span class="badge badge-code">Code (thực tế)</span>
+    <span class="badge badge-todo">TODO (chưa implement)</span>
+  </h1>
+  <p>Dựa trên source code tại /Users/jasonhoang/Desktop/SE-Agent &nbsp;·&nbsp; Paper: arXiv:2508.02085 (NeurIPS 2025)</p>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab(0)">① Luồng chạy tổng quan</div>
+  <div class="tab" onclick="switchTab(1)">② Output files format</div>
+  <div class="tab" onclick="switchTab(2)">③ Câu hỏi 1: Multi-planning → Patch → Validation</div>
+  <div class="tab" onclick="switchTab(3)">④ Câu hỏi 2: 10 trajectories từ đâu?</div>
+  <div class="tab" onclick="switchTab(4)">⑤ Câu hỏi 3: Recombination có đảm bảo tốt nhất?</div>
+  <div class="tab" onclick="switchTab(5)">⑥ Câu hỏi 4: Sau combine thì làm gì?</div>
+</div>
+
+<div class="content">
+
+<!-- ===================== TAB 0: FLOW ===================== -->
+<div class="panel active" id="panel-0">
+  <div class="section-title">Sơ đồ luồng chạy SE-Agent</div>
+  <div class="section-sub">Màu vàng = chỉ có trong paper (chưa implement trong code) · Màu xanh lá = đã implement · Màu đỏ = TODO</div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#276749"></div> Đã implement trong code</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#7b4f12"></div> Paper only - chưa implement</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#742a2a"></div> TODO - chưa tích hợp</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#553c9a"></div> Operator (tạo system prompt)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#2b6cb0"></div> Input / Output files</div>
+  </div>
+
+  <div class="flow-container">
+  <svg viewBox="0 0 1100 1200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:1100px;display:block;margin:0 auto">
+    <defs>
+      <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#4a5568"/>
+      </marker>
+      <marker id="arrow-orange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#7b4f12"/>
+      </marker>
+    </defs>
+
+    <!-- INPUT -->
+    <rect x="380" y="20" width="340" height="64" rx="8" fill="#1e2d40" stroke="#2b6cb0" stroke-width="1.5"/>
+    <text x="550" y="42" text-anchor="middle" fill="#718096" font-size="10" font-family="system-ui" font-weight="700" letter-spacing="0.5">INPUT</text>
+    <text x="550" y="60" text-anchor="middle" fill="#fff" font-size="13" font-family="system-ui" font-weight="600">SWE-bench Instance</text>
+    <text x="550" y="76" text-anchor="middle" fill="#a0aec0" font-size="11" font-family="system-ui">GitHub issue + codebase repo</text>
+
+    <!-- Arrow down to phase 1 -->
+    <line x1="550" y1="84" x2="550" y2="108" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- PHASE 1 HEADER -->
+    <rect x="60" y="110" width="980" height="36" rx="6" fill="#161b22" stroke="#2d3748"/>
+    <text x="550" y="133" text-anchor="middle" fill="#a0aec0" font-size="12" font-family="system-ui" font-weight="700">PHASE 1 — MULTI-PLANNING (Code: basic_run.py:275, strategy.iterations)</text>
+
+    <!-- Strategy boxes - 5 iterations -->
+    <rect x="60" y="158" width="168" height="80" rx="6" fill="#1a3a2a" stroke="#276749" stroke-width="1.5"/>
+    <text x="144" y="178" text-anchor="middle" fill="#68d391" font-size="10" font-family="system-ui" font-weight="700">ITERATION 1</text>
+    <text x="144" y="196" text-anchor="middle" fill="#fff" font-size="12" font-family="system-ui" font-weight="600">Strategy 1</text>
+    <text x="144" y="212" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">baseconfig1.yaml</text>
+    <text x="144" y="228" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">operator: null</text>
+
+    <rect x="244" y="158" width="168" height="80" rx="6" fill="#1a3a2a" stroke="#276749" stroke-width="1.5"/>
+    <text x="328" y="178" text-anchor="middle" fill="#68d391" font-size="10" font-family="system-ui" font-weight="700">ITERATION 2</text>
+    <text x="328" y="196" text-anchor="middle" fill="#fff" font-size="12" font-family="system-ui" font-weight="600">Strategy 2</text>
+    <text x="328" y="212" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">baseconfig2.yaml</text>
+    <text x="328" y="228" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">operator: null</text>
+
+    <rect x="428" y="158" width="168" height="80" rx="6" fill="#1a3a2a" stroke="#276749" stroke-width="1.5"/>
+    <text x="512" y="178" text-anchor="middle" fill="#68d391" font-size="10" font-family="system-ui" font-weight="700">ITERATION 3</text>
+    <text x="512" y="196" text-anchor="middle" fill="#fff" font-size="12" font-family="system-ui" font-weight="600">Strategy 3</text>
+    <text x="512" y="212" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">baseconfig2.yaml</text>
+    <text x="512" y="228" text-anchor="middle" fill="#553c9a" font-size="10" font-family="system-ui" font-weight="600">operator: alternative_strategy</text>
+
+    <rect x="612" y="158" width="168" height="80" rx="6" fill="#1a3a2a" stroke="#276749" stroke-width="1.5"/>
+    <text x="696" y="178" text-anchor="middle" fill="#68d391" font-size="10" font-family="system-ui" font-weight="700">ITERATION 4</text>
+    <text x="696" y="196" text-anchor="middle" fill="#fff" font-size="12" font-family="system-ui" font-weight="600">Strategy 4</text>
+    <text x="696" y="212" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">baseconfig1.yaml</text>
+    <text x="696" y="228" text-anchor="middle" fill="#553c9a" font-size="10" font-family="system-ui" font-weight="600">operator: crossover</text>
+
+    <rect x="796" y="158" width="168" height="80" rx="6" fill="#1a3a2a" stroke="#276749" stroke-width="1.5"/>
+    <text x="880" y="178" text-anchor="middle" fill="#68d391" font-size="10" font-family="system-ui" font-weight="700">ITERATION 5</text>
+    <text x="880" y="196" text-anchor="middle" fill="#fff" font-size="12" font-family="system-ui" font-weight="600">Strategy 5</text>
+    <text x="880" y="212" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">baseconfig1.yaml</text>
+    <text x="880" y="228" text-anchor="middle" fill="#553c9a" font-size="10" font-family="system-ui" font-weight="600">operator: traj_pool_summary</text>
+
+    <!-- Note: SEQUENTIAL -->
+    <text x="550" y="250" text-anchor="middle" fill="#f6ad55" font-size="11" font-family="system-ui" font-style="italic">⚠ Code chạy TUẦN TỰ, không song song. Mỗi iteration = 1 trajectory/instance</text>
+
+    <!-- Arrows down from each strategy box -->
+    <line x1="144" y1="238" x2="144" y2="270" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <line x1="328" y1="238" x2="328" y2="270" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <line x1="512" y1="238" x2="512" y2="270" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <line x1="696" y1="238" x2="696" y2="270" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <line x1="880" y1="238" x2="880" y2="270" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- SWE-Agent run boxes -->
+    <rect x="60" y="272" width="168" height="54" rx="6" fill="#0d1117" stroke="#2d3748"/>
+    <text x="144" y="295" text-anchor="middle" fill="#58a6ff" font-size="11" font-family="system-ui" font-weight="600">SWE-Agent Run</text>
+    <text x="144" y="311" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">Docker + ReAct loop</text>
+    <text x="144" y="323" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">→ git diff → submit</text>
+
+    <rect x="244" y="272" width="168" height="54" rx="6" fill="#0d1117" stroke="#2d3748"/>
+    <text x="328" y="295" text-anchor="middle" fill="#58a6ff" font-size="11" font-family="system-ui" font-weight="600">SWE-Agent Run</text>
+    <text x="328" y="311" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">Docker + ReAct loop</text>
+    <text x="328" y="323" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">→ git diff → submit</text>
+
+    <rect x="428" y="272" width="168" height="54" rx="6" fill="#0d1117" stroke="#2d3748"/>
+    <text x="512" y="295" text-anchor="middle" fill="#58a6ff" font-size="11" font-family="system-ui" font-weight="600">SWE-Agent Run</text>
+    <text x="512" y="311" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">Docker + ReAct loop</text>
+    <text x="512" y="323" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">→ git diff → submit</text>
+
+    <rect x="612" y="272" width="168" height="54" rx="6" fill="#0d1117" stroke="#2d3748"/>
+    <text x="696" y="295" text-anchor="middle" fill="#58a6ff" font-size="11" font-family="system-ui" font-weight="600">SWE-Agent Run</text>
+    <text x="696" y="311" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">Docker + ReAct loop</text>
+    <text x="696" y="323" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">→ git diff → submit</text>
+
+    <rect x="796" y="272" width="168" height="54" rx="6" fill="#0d1117" stroke="#2d3748"/>
+    <text x="880" y="295" text-anchor="middle" fill="#58a6ff" font-size="11" font-family="system-ui" font-weight="600">SWE-Agent Run</text>
+    <text x="880" y="311" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">Docker + ReAct loop</text>
+    <text x="880" y="323" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">→ git diff → submit</text>
+
+    <!-- Arrows to output files -->
+    <line x1="144" y1="326" x2="144" y2="356" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <line x1="328" y1="326" x2="328" y2="356" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <line x1="512" y1="326" x2="512" y2="356" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <line x1="696" y1="326" x2="696" y2="356" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <line x1="880" y1="326" x2="880" y2="356" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- Output files per iteration -->
+    <rect x="60" y="358" width="168" height="70" rx="6" fill="#1e2d40" stroke="#2b6cb0"/>
+    <text x="144" y="376" text-anchor="middle" fill="#2b6cb0" font-size="10" font-family="monospace" font-weight="700">Output Files (it.1/)</text>
+    <text x="144" y="392" text-anchor="middle" fill="#e2e8f0" font-size="11" font-family="monospace">.traj  .tra  .pred</text>
+    <text x="144" y="408" text-anchor="middle" fill="#68d391" font-size="11" font-family="monospace">.patch (nếu có fix)</text>
+    <text x="144" y="422" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="monospace">preds.json</text>
+
+    <rect x="244" y="358" width="168" height="70" rx="6" fill="#1e2d40" stroke="#2b6cb0"/>
+    <text x="328" y="376" text-anchor="middle" fill="#2b6cb0" font-size="10" font-family="monospace" font-weight="700">Output Files (it.2/)</text>
+    <text x="328" y="392" text-anchor="middle" fill="#e2e8f0" font-size="11" font-family="monospace">.traj  .tra  .pred</text>
+    <text x="328" y="408" text-anchor="middle" fill="#68d391" font-size="11" font-family="monospace">.patch (nếu có fix)</text>
+    <text x="328" y="422" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="monospace">preds.json</text>
+
+    <rect x="428" y="358" width="168" height="70" rx="6" fill="#1e2d40" stroke="#2b6cb0"/>
+    <text x="512" y="376" text-anchor="middle" fill="#2b6cb0" font-size="10" font-family="monospace" font-weight="700">Output Files (it.3/)</text>
+    <text x="512" y="392" text-anchor="middle" fill="#e2e8f0" font-size="11" font-family="monospace">.traj  .tra  .pred</text>
+    <text x="512" y="408" text-anchor="middle" fill="#68d391" font-size="11" font-family="monospace">.patch (nếu có fix)</text>
+    <text x="512" y="422" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="monospace">preds.json + system_prompt/</text>
+
+    <rect x="612" y="358" width="168" height="70" rx="6" fill="#1e2d40" stroke="#2b6cb0"/>
+    <text x="696" y="376" text-anchor="middle" fill="#2b6cb0" font-size="10" font-family="monospace" font-weight="700">Output Files (it.4/)</text>
+    <text x="696" y="392" text-anchor="middle" fill="#e2e8f0" font-size="11" font-family="monospace">.traj  .tra  .pred</text>
+    <text x="696" y="408" text-anchor="middle" fill="#68d391" font-size="11" font-family="monospace">.patch (nếu có fix)</text>
+    <text x="696" y="422" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="monospace">preds.json + system_prompt/</text>
+
+    <rect x="796" y="358" width="168" height="70" rx="6" fill="#1e2d40" stroke="#2b6cb0"/>
+    <text x="880" y="376" text-anchor="middle" fill="#2b6cb0" font-size="10" font-family="monospace" font-weight="700">Output Files (it.5/)</text>
+    <text x="880" y="392" text-anchor="middle" fill="#e2e8f0" font-size="11" font-family="monospace">.traj  .tra  .pred</text>
+    <text x="880" y="408" text-anchor="middle" fill="#68d391" font-size="11" font-family="monospace">.patch (nếu có fix)</text>
+    <text x="880" y="422" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="monospace">preds.json + system_prompt/</text>
+
+    <!-- Arrows to traj.pool -->
+    <line x1="144" y1="428" x2="144" y2="452" stroke="#4a5568" stroke-width="1"/>
+    <line x1="328" y1="428" x2="328" y2="452" stroke="#4a5568" stroke-width="1"/>
+    <line x1="512" y1="428" x2="512" y2="452" stroke="#4a5568" stroke-width="1"/>
+    <line x1="696" y1="428" x2="696" y2="452" stroke="#4a5568" stroke-width="1"/>
+    <line x1="880" y1="428" x2="880" y2="452" stroke="#4a5568" stroke-width="1"/>
+    <line x1="144" y1="452" x2="880" y2="452" stroke="#4a5568" stroke-width="1"/>
+    <line x1="550" y1="452" x2="550" y2="476" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- traj.pool -->
+    <rect x="340" y="478" width="420" height="60" rx="8" fill="#2d1b4e" stroke="#553c9a" stroke-width="1.5"/>
+    <text x="550" y="500" text-anchor="middle" fill="#b794f4" font-size="11" font-family="system-ui" font-weight="700">traj.pool (Cross-iteration knowledge base)</text>
+    <text x="550" y="518" text-anchor="middle" fill="#a0aec0" font-size="11" font-family="system-ui">LLM summarizes each trajectory → JSON</text>
+    <text x="550" y="532" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="monospace">{instance_id: {"1": summary, "2": summary, ...}}</text>
+
+    <!-- Arrow down to PHASE 2 label -->
+    <line x1="550" y1="538" x2="550" y2="560" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- PHASE 2 HEADER - REVISION -->
+    <rect x="60" y="562" width="980" height="30" rx="6" fill="#2a1a00" stroke="#7b4f12"/>
+    <text x="550" y="582" text-anchor="middle" fill="#f6ad55" font-size="12" font-family="system-ui" font-weight="700">PHASE 2 — REVISION: Reflect(τ,t) → Revise(τ,R) ⚠ PAPER ONLY — CHƯA IMPLEMENT TRONG CODE</text>
+
+    <!-- Revision boxes -->
+    <rect x="80" y="604" width="440" height="90" rx="8" fill="#2a1a00" stroke="#7b4f12" stroke-width="1.5"/>
+    <text x="300" y="624" text-anchor="middle" fill="#f6ad55" font-size="11" font-family="system-ui" font-weight="700">Reflection (3 LLM calls per trajectory)</text>
+    <text x="300" y="642" text-anchor="middle" fill="#a0aec0" font-size="11" font-family="system-ui">① Find Critical Step: LLM tìm bước quan trọng nhất</text>
+    <text x="300" y="658" text-anchor="middle" fill="#a0aec0" font-size="11" font-family="system-ui">② Conclude Features: extract approach, files, assumptions</text>
+    <text x="300" y="674" text-anchor="middle" fill="#a0aec0" font-size="11" font-family="system-ui">③ Revision: tạo trajectory mới từ góc nhìn khác</text>
+    <text x="300" y="690" text-anchor="middle" fill="#fc8181" font-size="10" font-family="system-ui" font-style="italic">→ Code gần nhất: alternative_strategy.py (chỉ tạo prompt, không chạy lại agent)</text>
+
+    <rect x="580" y="604" width="440" height="90" rx="8" fill="#2a1a00" stroke="#7b4f12" stroke-width="1.5"/>
+    <text x="800" y="624" text-anchor="middle" fill="#f6ad55" font-size="11" font-family="system-ui" font-weight="700">Kết quả: 5 gốc + 5 revised = 10 trajectories</text>
+    <text x="800" y="644" text-anchor="middle" fill="#a0aec0" font-size="11" font-family="system-ui">τ₁, τ₂, τ₃, τ₄, τ₅  (original)</text>
+    <text x="800" y="660" text-anchor="middle" fill="#a0aec0" font-size="11" font-family="system-ui">τ₁', τ₂', τ₃', τ₄', τ₅'  (revised)</text>
+    <text x="800" y="678" text-anchor="middle" fill="#fc8181" font-size="10" font-family="system-ui" font-style="italic">⚠ evaluation_function.py cũng TODO</text>
+    <text x="800" y="692" text-anchor="middle" fill="#fc8181" font-size="10" font-family="system-ui" font-style="italic">Code thực tế: chỉ có summary trong traj.pool</text>
+
+    <!-- Arrow down to PHASE 3 -->
+    <line x1="550" y1="694" x2="550" y2="718" stroke="#7b4f12" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow-orange)"/>
+
+    <!-- PHASE 3 HEADER - RECOMBINATION -->
+    <rect x="60" y="720" width="980" height="30" rx="6" fill="#161b22" stroke="#2d3748"/>
+    <text x="550" y="740" text-anchor="middle" fill="#a0aec0" font-size="12" font-family="system-ui" font-weight="700">PHASE 3 — RECOMBINATION: Paper = 3 sub-ops · Code = chỉ có crossover (từ summary)</text>
+
+    <!-- Recombination boxes -->
+    <rect x="80" y="762" width="280" height="88" rx="8" fill="#1a2634" stroke="#2c5282" stroke-width="1.5"/>
+    <text x="220" y="782" text-anchor="middle" fill="#63b3ed" font-size="11" font-family="system-ui" font-weight="700">Crossover ✓ (Code: crossover.py)</text>
+    <text x="220" y="800" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">Lấy 2 summary GẦN NHẤT</text>
+    <text x="220" y="816" text-anchor="middle" fill="#f6ad55" font-size="10" font-family="system-ui">⚠ Không phải fitness-based!</text>
+    <text x="220" y="832" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">LLM tạo strategy mới từ 2 cái</text>
+    <text x="220" y="846" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">→ system_prompt YAML cho it. tiếp</text>
+
+    <rect x="400" y="762" width="280" height="88" rx="8" fill="#2a1a00" stroke="#7b4f12" stroke-width="1.5"/>
+    <text x="540" y="782" text-anchor="middle" fill="#f6ad55" font-size="11" font-family="system-ui" font-weight="700">Transfer Learning ✗ (Paper only)</text>
+    <text x="540" y="800" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">Chuyển knowledge từ trajectory</text>
+    <text x="540" y="816" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">tốt nhất sang trajectory kém</text>
+    <text x="540" y="832" text-anchor="middle" fill="#fc8181" font-size="10" font-family="system-ui" font-style="italic">Prompt có ở Appendix A.2</text>
+    <text x="540" y="846" text-anchor="middle" fill="#fc8181" font-size="10" font-family="system-ui" font-style="italic">nhưng KHÔNG có trong code</text>
+
+    <rect x="720" y="762" width="280" height="88" rx="8" fill="#2a1a00" stroke="#7b4f12" stroke-width="1.5"/>
+    <text x="860" y="782" text-anchor="middle" fill="#f6ad55" font-size="11" font-family="system-ui" font-weight="700">Restructuring ✗ (Paper only)</text>
+    <text x="860" y="800" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">Global analysis toàn bộ pool</text>
+    <text x="860" y="816" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">Tổng hợp 1 trajectory hoàn toàn mới</text>
+    <text x="860" y="832" text-anchor="middle" fill="#fc8181" font-size="10" font-family="system-ui" font-style="italic">Prompt có ở Appendix A.2</text>
+    <text x="860" y="846" text-anchor="middle" fill="#fc8181" font-size="10" font-family="system-ui" font-style="italic">nhưng KHÔNG có trong code</text>
+
+    <!-- Arrow down to PHASE 4 -->
+    <line x1="550" y1="850" x2="550" y2="874" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- PHASE 4 HEADER - REFINEMENT -->
+    <rect x="60" y="876" width="980" height="30" rx="6" fill="#161b22" stroke="#2d3748"/>
+    <text x="550" y="896" text-anchor="middle" fill="#a0aec0" font-size="12" font-family="system-ui" font-weight="700">PHASE 4 — REFINEMENT &amp; SELECTION: Paper = Eval+Select · Code = traj_pool_summary operator</text>
+
+    <!-- Refinement boxes -->
+    <rect x="80" y="918" width="380" height="90" rx="8" fill="#1a2634" stroke="#2c5282" stroke-width="1.5"/>
+    <text x="270" y="938" text-anchor="middle" fill="#63b3ed" font-size="11" font-family="system-ui" font-weight="700">traj_pool_summary ✓ (Code: traj_pool_summary.py)</text>
+    <text x="270" y="956" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">Phân tích tất cả trajectories trong traj.pool</text>
+    <text x="270" y="972" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">LLM tạo "Risk-Aware Guidance"</text>
+    <text x="270" y="988" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">Highlight blind spots + failure patterns</text>
+    <text x="270" y="1004" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">→ inject vào system_prompt iteration tiếp</text>
+
+    <rect x="510" y="918" width="200" height="90" rx="8" fill="#1a0000" stroke="#742a2a" stroke-width="1.5"/>
+    <text x="610" y="938" text-anchor="middle" fill="#fc8181" font-size="11" font-family="system-ui" font-weight="700">Evaluation ✗ TODO</text>
+    <text x="610" y="956" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">evaluation_function.py</text>
+    <text x="610" y="972" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">TaskCompletion +</text>
+    <text x="610" y="988" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">ReasoningQuality +</text>
+    <text x="610" y="1004" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">Efficiency scoring</text>
+
+    <rect x="760" y="918" width="260" height="90" rx="8" fill="#1a0000" stroke="#742a2a" stroke-width="1.5"/>
+    <text x="890" y="938" text-anchor="middle" fill="#fc8181" font-size="11" font-family="system-ui" font-weight="700">Selection ✗ TODO</text>
+    <text x="890" y="956" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">Γ_{k+1} = Select(Γ_k ∪ Γ'_k, o)</text>
+    <text x="890" y="972" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">Elite trajectories (top scores)</text>
+    <text x="890" y="988" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">+ Diversity metrics</text>
+    <text x="890" y="1004" text-anchor="middle" fill="#a0aec0" font-size="10" font-family="system-ui">Code: vòng lặp dừng theo iterations</text>
+
+    <!-- Arrow down to EVALUATION -->
+    <line x1="550" y1="1008" x2="550" y2="1032" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- EVALUATION box -->
+    <rect x="200" y="1034" width="700" height="70" rx="8" fill="#1a1a2e" stroke="#44337a" stroke-width="1.5"/>
+    <text x="550" y="1056" text-anchor="middle" fill="#b794f4" font-size="12" font-family="system-ui" font-weight="700">EVALUATION — sb-cli submit (Ngoài main loop)</text>
+    <text x="550" y="1076" text-anchor="middle" fill="#a0aec0" font-size="11" font-family="system-ui">sb-cli submit swe-bench_verified test --predictions_path preds.json</text>
+    <text x="550" y="1090" text-anchor="middle" fill="#f6ad55" font-size="10" font-family="system-ui">⚠ Tất cả configs có evaluate: false → KHÔNG auto-eval. Phải submit thủ công sau khi chạy xong</text>
+
+    <!-- Arrow to results -->
+    <line x1="550" y1="1104" x2="550" y2="1128" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- Results -->
+    <rect x="340" y="1130" width="420" height="54" rx="8" fill="#1e2d40" stroke="#2b6cb0" stroke-width="1.5"/>
+    <text x="550" y="1152" text-anchor="middle" fill="#63b3ed" font-size="12" font-family="system-ui" font-weight="700">results.json</text>
+    <text x="550" y="1170" text-anchor="middle" fill="#a0aec0" font-size="11" font-family="system-ui">Pass@1, Pass@5 tính từ bộ results của tất cả iterations</text>
+  </svg>
+  </div>
+
+  <div class="alert alert-warn" style="margin-top:20px">
+    <strong>Tóm tắt GAP giữa Paper và Code:</strong><br>
+    Paper mô tả hệ thống tiến hóa liên tục (5→10→recombine→select→lặp). Code hiện tại chỉ là: chạy N iterations tuần tự, mỗi iteration có thể dùng 1 operator để tạo system prompt mới cho iteration kế tiếp. Không có eval tự động, không có selection, không có convergence.
+  </div>
+</div>
+
+<!-- ===================== TAB 1: OUTPUT FILES ===================== -->
+<div class="panel" id="panel-1">
+  <div class="section-title">Output Files Format — Sample thực tế từ codebase</div>
+  <div class="section-sub">Tất cả sample lấy từ SE/trajectories/dpsk_20260301_092217/ (instance: astropy__astropy-13033)</div>
+
+  <div class="file-tabs">
+    <div class="file-tab active" onclick="switchFile(0)">.traj</div>
+    <div class="file-tab" onclick="switchFile(1)">.tra</div>
+    <div class="file-tab" onclick="switchFile(2)">.pred</div>
+    <div class="file-tab" onclick="switchFile(3)">.patch</div>
+    <div class="file-tab" onclick="switchFile(4)">traj.pool</div>
+    <div class="file-tab" onclick="switchFile(5)">preds.json</div>
+    <div class="file-tab" onclick="switchFile(6)">system_prompt/*.yaml</div>
+  </div>
+
+  <div class="file-panels">
+
+    <!-- .traj -->
+    <div class="file-panel active" id="file-0">
+      <div class="code-block" style="margin:0;border-radius:0 8px 8px 8px;border-top:none">
+        <div class="code-header">
+          <span class="code-filename">iteration_2/astropy__astropy-13033/astropy__astropy-13033.traj</span>
+          <span class="code-desc">Raw trajectory — full ReAct history, có thể rất lớn (MB)</span>
+        </div>
+        <div class="code-body">{
+  "trajectory": [
+    {
+      "action": "str_replace_editor view /testbed/astropy/timeseries/core.py",
+      "observation": "Here's the result of running `cat -n` on /testbed/...\n     1\t# Licensed under a 3-clause BSD style...",
+      "response": "...(full LLM raw response)...",
+      "thought": "Let me analyze the issue and propose a solution...\n1. Understanding the Issue...",
+      "execution_time": 3.421,
+      "state": {
+        "working_dir": "/testbed",
+        "diff": "diff --git a/astropy/timeseries/core.py b/..."
+      },
+      "query": [
+        {"role": "system", "content": "You are a helpful assistant..."},
+        {"role": "user",   "content": [{"type": "text", "text": "&lt;uploaded_files&gt;\n/testbed\n..."}]}
+      ]
+    },
+    {
+      "action": "str_replace_editor str_replace /testbed/astropy/timeseries/core.py ...",
+      "observation": "The file has been edited successfully.",
+      "thought": "Now let me run the test to verify the fix...",
+      "execution_time": 1.85
+    }
+    // ... nhiều bước nữa ...
+  ],
+  "history": [
+    {"role": "system",    "content": "You are a helpful assistant..."},
+    {"role": "user",      "content": [{"type": "text", "text": "...problem statement..."}]},
+    {"role": "assistant", "content": [{"type": "text", "text": "thought + action"}]},
+    {"role": "user",      "content": "OBSERVATION:\nThe file has been edited..."}
+  ],
+  "info": {
+    "submission": "diff --git a/astropy/timeseries/core.py...",
+    "exit_status": "submitted",
+    "model_stats": {"api_calls": 12, "tokens_sent": 45230, "tokens_received": 8934}
+  }
+}</div>
+      </div>
+      <div class="alert alert-info" style="margin-top:8px">
+        Được tạo bởi <code>sweagent/agent/agents.py:DefaultAgent.save_trajectory()</code>. Chứa toàn bộ history LLM + observations. Thường vài MB mỗi file.
+      </div>
+    </div>
+
+    <!-- .tra -->
+    <div class="file-panel" id="file-1">
+      <div class="code-block" style="margin:0;border-radius:0 8px 8px 8px;border-top:none">
+        <div class="code-header">
+          <span class="code-filename">iteration_2/astropy__astropy-13033/astropy__astropy-13033.tra</span>
+          <span class="code-desc">Compressed trajectory — ~80% nhỏ hơn .traj, dùng cho operators</span>
+        </div>
+        <div class="code-body">{
+  "Trajectory": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant that can interact with a computer to solve tasks."
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "&lt;uploaded_files&gt;\n/testbed\n&lt;/uploaded_files&gt;\n...
+&lt;pr_description&gt;\nTimeSeries: misleading exception when required column check fails.\n...
+Can you help me implement the necessary changes...&lt;/pr_description&gt;\n..."
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "thought": "Let me analyze the issue and propose a solution step by step.\n1. Understanding the Issue...",
+      "action": "str_replace_editor view /testbed/timeseries/core.py"
+    },
+    {
+      "role": "tool",
+      "content": "OBSERVATION:\nThe path /testbed/timeseries/core.py does not exist...\n"
+    },
+    {
+      "role": "assistant",
+      "thought": "It seems the file does not exist. Let's first explore the directory...",
+      "action": "str_replace_editor view /testbed"
+    },
+    {
+      "role": "tool",
+      "content": "OBSERVATION:\nHere's the files and directories...\n/testbed\n/testbed/pyproject.toml... [TRUNCATED] ..."
+    }
+    // ... các bước tiếp theo, observations bị truncate ...
+  ]
+}
+
+// RULE CẮT NGẮN (trajectory_processor.py):
+// - action > 350 chars → giữ đầu + đuôi, thêm [TRUNCATED]
+// - observation text > 300 chars → giữ 20% đầu + 10% cuối + [TRUNCATED]
+// - str_replace_editor actions được truncate riêng</div>
+      </div>
+      <div class="alert alert-info" style="margin-top:8px">
+        Tạo bởi <code>SE/core/utils/trajectory_processor.py:TrajectoryProcessor</code> sau khi iteration thành công. Dùng làm input cho operators ở các iterations tiếp theo.
+      </div>
+    </div>
+
+    <!-- .pred -->
+    <div class="file-panel" id="file-2">
+      <div class="code-block" style="margin:0;border-radius:0 8px 8px 8px;border-top:none">
+        <div class="code-header">
+          <span class="code-filename">iteration_2/astropy__astropy-13033/astropy__astropy-13033.pred</span>
+          <span class="code-desc">Prediction file — single-line JSON, SWE-bench format</span>
+        </div>
+        <div class="code-body">{"model_name_or_path": "iteration_2", "instance_id": "astropy__astropy-13033", "model_patch": "diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py\nindex c279f35f8..733c5b332 100644\n--- a/astropy/timeseries/core.py\n+++ b/astropy/timeseries/core.py\n@@ -70,15 +70,17 @@ class BaseTimeSeries(QTable):\n..."}</div>
+      </div>
+      <div class="alert alert-info" style="margin-top:8px">
+        Tạo bởi <code>sweagent/run/common.py:save_predictions()</code>. Nếu agent không submit được, <code>model_patch</code> = <code>"FAILED_NO_PATCH"</code>. Các file này được merge thành <code>preds.json</code>.
+      </div>
+    </div>
+
+    <!-- .patch -->
+    <div class="file-panel" id="file-3">
+      <div class="code-block" style="margin:0;border-radius:0 8px 8px 8px;border-top:none">
+        <div class="code-header">
+          <span class="code-filename">iteration_2/astropy__astropy-13033/astropy__astropy-13033.patch</span>
+          <span class="code-desc">Git unified diff — thay đổi thực sự agent tạo ra trong repo</span>
+        </div>
+        <div class="code-body">diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py
+index c279f35f8..733c5b332 100644
+--- a/astropy/timeseries/core.py
++++ b/astropy/timeseries/core.py
+@@ -70,15 +70,17 @@ class BaseTimeSeries(QTable):
+
+             if not self._required_columns_relax and len(self.colnames) == 0:
+
+-                raise ValueError("{} object is invalid - expected '{}' "
+-                                 "as the first column{} but time series has no columns"
+-                                 .format(self.__class__.__name__, required_columns[0], plural))
++                raise ValueError("{} object has no columns - expected {}"
++                                 .format(self.__class__.__name__, required_columns))
+
+             elif self.colnames[:len(required_columns)] != required_columns:
+-
+-                raise ValueError("{} object is invalid - expected '{}' "
+-                                 "as the first column{} but found '{}'"
+-                                 .format(self.__class__.__name__, required_columns[0], plural, self.colnames[0]))
++                missing = set(required_columns) - set(self.colnames)
++                if missing:
++                    raise ValueError("{} object is missing required column{}: {}"
++                                     .format(self.__class__.__name__, plural, ', '.join(missing)))
++                else:
++                    raise ValueError("{} object has incorrect column order - expected {} but found {}"
++                                     .format(self.__class__.__name__, required_columns, self.colnames[:len(required_columns)]))
+
+diff --git a/test_timeseries.py b/test_timeseries.py
+new file mode 100644
+index 000000000..903952dc5
+--- /dev/null
++++ b/test_timeseries.py
+@@ -0,0 +1,11 @@
++from astropy.time import Time
++from astropy.timeseries import TimeSeries
++import numpy as np
++
++time = Time(np.arange(100000, 100003), format='jd')
++ts = TimeSeries(time=time, data={"flux": [99.9, 99.8, 99.7]})
++ts._required_columns = ["time", "flux"]
++try:
++    ts.remove_column("flux")
++except ValueError as e:
++    print(f"Error message: {e}")</div>
+      </div>
+      <div class="alert alert-info" style="margin-top:8px">
+        Tạo trong Docker container bởi lệnh <code>git add -A && git diff --cached &gt; /root/model.patch</code> khi agent gọi submit. Lưu ra bởi <code>sweagent/run/hooks/apply_patch.py:SaveApplyPatchHook</code>.
+      </div>
+    </div>
+
+    <!-- traj.pool -->
+    <div class="file-panel" id="file-4">
+      <div class="code-block" style="margin:0;border-radius:0 8px 8px 8px;border-top:none">
+        <div class="code-header">
+          <span class="code-filename">traj.pool  (root của experiment run)</span>
+          <span class="code-desc">Cross-iteration knowledge base — LLM-generated summaries, tích lũy qua các iterations</span>
+        </div>
+        <div class="code-body">{
+  "astropy__astropy-13033": {
+    "2": {
+      "approach_summary": "The solution focused on improving error messaging in the TimeSeries class when required column checks fail. The main change was to modify the validation logic to provide clearer error messages that specifically identify missing required columns rather than misleading messages about column order.",
+      "modified_files": [
+        "/testbed/astropy/timeseries/core.py",
+        "/testbed/test_timeseries.py"
+      ],
+      "key_changes": {
+        "core.py": "Rewrote the error message generation in _check_required_columns() to: 1) Clearly state when no columns exist, 2) Specifically identify missing required columns, 3) Only mention column order when columns exist but are in wrong order",
+        "test_timeseries.py": "Created a test script to verify the new error messaging behavior"
+      },
+      "strategy": "The core strategy was to enhance the validation logic to first check for missing required columns before checking column order, and to provide more descriptive error messages.",
+      "specific_techniques": ["Error message refinement", "Conditional error message generation", "Set operations to identify missing columns"],
+      "tools_used": ["str_replace_editor for file modifications", "python command for test execution"],
+      "reasoning_pattern": "1. Identified misleading error 2. Located validation code 3. Analyzed logic 4. Restructured validation 5. Implemented clearer messages 6. Verified fix",
+      "assumptions_made": ["Issue was solely related to error messaging", "TimeSeries class structure would remain stable"],
+      "components_touched": ["BaseTimeSeries._check_required_columns() method"]
+    },
+    "3": {
+      "approach_summary": "Attempt interrupted by system error before analysis.",
+      "modified_files": [],
+      "key_changes": "No changes were made due to early termination.",
+      "strategy": "strategy_not_determined",
+      "specific_techniques": [],
+      "tools_used": [],
+      "reasoning_pattern": "step_by_step_execution",
+      "assumptions_made": ["The error could be reproduced with the given example"],
+      "components_touched": [],
+      "meta": {
+        "is_fallback": false,
+        "trajectory_length": 28,
+        "patch_length": 99,
+        "iteration": 3
+      }
+    }
+  }
+}</div>
+      </div>
+      <div class="alert alert-info" style="margin-top:8px">
+        Tạo và cập nhật bởi <code>SE/core/utils/traj_pool_manager.py:TrajPoolManager</code>. Sau mỗi iteration thành công, LLM đọc <code>.tra</code> file và tạo structured summary. Dùng bởi tất cả operators ở iterations tiếp theo.
+      </div>
+    </div>
+
+    <!-- preds.json -->
+    <div class="file-panel" id="file-5">
+      <div class="code-block" style="margin:0;border-radius:0 8px 8px 8px;border-top:none">
+        <div class="code-header">
+          <span class="code-filename">iteration_2/preds.json  (merge tất cả .pred trong iteration)</span>
+          <span class="code-desc">Input cho sb-cli submit để SWE-bench evaluation</span>
+        </div>
+        <div class="code-body">{
+    "astropy__astropy-13033": {
+        "model_name_or_path": "iteration_2",
+        "instance_id": "astropy__astropy-13033",
+        "model_patch": "diff --git a/astropy/timeseries/core.py ...\n..."
+    },
+    "django__django-10097": {
+        "model_name_or_path": "iteration_2",
+        "instance_id": "django__django-10097",
+        "model_patch": ""  // empty = agent không tạo được patch
+    },
+    "scikit-learn__scikit-learn-14629": {
+        "model_name_or_path": "iteration_2",
+        "instance_id": "scikit-learn__scikit-learn-14629",
+        "model_patch": "FAILED_NO_PATCH"  // hoặc string này nếu agent fail hoàn toàn
+    }
+    // ...tất cả instances trong run
+}</div>
+      </div>
+      <div class="alert alert-warn" style="margin-top:8px">
+        Tạo bởi <code>sweagent/run/merge_predictions.py:merge_predictions()</code>. Submit lên SWE-bench server bằng: <code>sb-cli submit swe-bench_verified test --predictions_path preds.json</code>. Kết quả trả về trong <code>results.json</code>. Hiện tại tất cả configs có <strong>evaluate: false</strong> — phải submit thủ công.
+      </div>
+    </div>
+
+    <!-- system_prompt yaml -->
+    <div class="file-panel" id="file-6">
+      <div class="code-block" style="margin:0;border-radius:0 8px 8px 8px;border-top:none">
+        <div class="code-header">
+          <span class="code-filename">iteration_3/system_prompt/astropy__astropy-13033.yaml</span>
+          <span class="code-desc">Operator output — ghi đè system prompt cho từng instance ở iteration kế tiếp</span>
+        </div>
+        <div class="code-body">agent:
+  templates:
+    system_template: "You are a helpful assistant that can interact with a terminal to solve software engineering tasks.\n\nRISK-AWARE PROBLEM SOLVING GUIDANCE:\n\nBLIND SPOTS TO AVOID:\n1. Assuming error messaging alone fixes underlying validation logic issues  \n2. Not verifying test coverage for edge cases beyond the PR example  \n3. Overlooking class structure dependencies when modifying validation  \n\nCRITICAL RISKS:  \n1. Silent failures when missing columns interact with reordering logic  \n2. Breaking backward compatibility with existing TimeSeries uses  \n3. Incomplete error handling masking root causes  \n\nSTRATEGIC APPROACH:  \nFirst reproduce the failure with varied test cases to isolate core validation flaws. Then implement dual validation: check required columns exist (fail-fast) before order validation. Finally, test against real-world usage patterns, not just PR examples. Prioritize fixing logic gaps before improving messages."
+
+// GIẢI THÍCH STRUCTURE:
+// - Được tạo bởi TemplateOperator._save_instance_template() (SE/operators/base.py:324-339)
+// - Mỗi instance có 1 file riêng trong system_prompt/ directory
+// - Khi swe_iterator.py chạy iteration tiếp, nó đọc dir này và inject vào agent config
+// - System template override system prompt gốc của base_config</div>
+      </div>
+      <div class="alert alert-info" style="margin-top:8px">
+        Tạo bởi operators (traj_pool_summary, alternative_strategy, crossover, trajectory_analyzer). Nội dung là guidance LLM-generated dựa trên traj.pool. Được inject vào SWE-agent ở iteration kế tiếp thay thế system prompt gốc.
+      </div>
+    </div>
+
+  </div><!-- end file-panels -->
+
+  <hr class="divider">
+  <div class="section-title" style="font-size:15px;margin-bottom:12px">Cấu trúc thư mục output đầy đủ</div>
+  <div class="code-block">
+    <div class="code-header">
+      <span class="code-filename">SE/trajectories/experiment_YYYYMMDD_HHMMSS/</span>
+      <span class="code-desc">Timestamped experiment run directory</span>
+    </div>
+    <div class="code-body">experiment_YYYYMMDD_HHMMSS/
+├── traj.pool                           ← Cross-iteration knowledge base (JSON)
+├── se_framework.log                    ← SE framework execution log
+├── iteration_1/
+│   ├── preds.json                      ← Merged predictions (all instances)
+│   └── astropy__astropy-13033/
+│       ├── astropy__astropy-13033.traj ← Full raw trajectory (JSON, large)
+│       ├── astropy__astropy-13033.tra  ← Compressed trajectory (JSON, 80% smaller)
+│       ├── astropy__astropy-13033.pred ← Prediction (single-line JSON)
+│       └── astropy__astropy-13033.patch← Git diff patch (plain text)
+├── iteration_2/
+│   ├── system_prompt/                  ← Operator output (created BEFORE this iteration runs)
+│   │   └── astropy__astropy-13033.yaml ← Per-instance system prompt override
+│   ├── preds.json
+│   └── astropy__astropy-13033/
+│       ├── *.traj  *.tra  *.pred  *.patch
+│       └── astropy__astropy-13033.problem  ← (optional) extracted PR description
+├── iteration_3/
+│   ├── system_prompt/                  ← Crossover operator output
+│   │   └── astropy__astropy-13033.yaml
+│   ├── preds.json
+│   └── astropy__astropy-13033/
+│       └── *.traj  *.tra  *.pred  *.patch
+└── [results.json]                      ← SWE-bench eval results (chỉ có khi evaluate:true)</div>
+  </div>
+</div>
+
+<!-- ===================== TAB 2: Q1 ===================== -->
+<div class="panel" id="panel-2">
+  <div class="qa-card">
+    <div class="qa-question">Câu 1: 5 Multi-planning strategies chạy tuần tự hay song song? Mỗi strategy ra 1 trajectory? Patch được tạo ra sao? Validate bằng cách nào?</div>
+
+    <div class="two-col">
+      <div>
+        <div class="qa-section">
+          <div class="qa-section-title title-paper">Paper nói gì</div>
+          <div class="qa-text">
+            5 planning strategies (<em>Planning 1–5</em>, xem Appendix A.1.1) tạo <strong>5 trajectories độc lập</strong>. Paper dùng ký hiệu Γ₀ᵖˡᵃⁿ = {τ₁,...,τ₅}. Mỗi trajectory τⱼ = sequence of (state, action) pairs — đây chính là ReAct history (Thought → Action → Observation lặp lại). Đây là bước "đa chiều" để explore solution space.
+          </div>
+        </div>
+        <div class="qa-section">
+          <div class="qa-section-title title-code">Code thực tế</div>
+          <div class="qa-text">
+            <strong>Chạy TUẦN TỰ</strong>, không song song. Trong <code>basic_run.py:275</code>, vòng lặp <code>for i, iteration in enumerate(iterations, 1)</code> xử lý từng iteration một. Mỗi iteration dùng 1 <code>base_config</code> khác nhau (khác nhau system prompt = khác strategy). Mỗi iteration tạo <strong>1 trajectory per instance</strong>.
+          </div>
+          <div class="qa-highlight">
+# basic_run.py:275
+iterations = config['strategy']['iterations']
+for i, iteration in enumerate(iterations, 1):  # SEQUENTIAL
+    # 1. Run operator (if any) → tạo system_prompt/
+    # 2. call_swe_iterator() → chạy SWE-agent
+    # 3. Generate .tra files
+    # 4. Update traj.pool
+</div>
+        </div>
+      </div>
+      <div>
+        <div class="qa-section">
+          <div class="qa-section-title title-paper">Patch được tạo thế nào?</div>
+          <div class="qa-text">Khi agent gọi lệnh <code>submit</code> trong Docker container, tool <code>submit</code> chạy:</div>
+          <div class="qa-highlight">git add -A && git diff --cached > /root/model.patch</div>
+          <div class="qa-text">Patch được đọc bởi <code>agents.py:handle_submission()</code>, lưu vào <code>.pred</code> và <code>.patch</code> files qua <code>SaveApplyPatchHook</code>.</div>
+        </div>
+        <div class="qa-section">
+          <div class="qa-section-title title-paper">Validation — pass/fail thế nào?</div>
+          <div class="qa-text">SWE-bench server nhận patch, apply vào repo gốc, chạy <strong>developer-written unit tests</strong> của project (pytest). Nếu tất cả test pass → instance resolved.</div>
+          <div class="qa-highlight">sb-cli submit swe-bench_verified test \
+  --predictions_path preds.json \
+  --run_id {run_id}
+# → trả về results.json với resolved/failed per instance</div>
+          <div class="alert alert-warn" style="margin-top:8px">
+            ⚠ Code hiện tại: <code>evaluate: false</code> trong tất cả configs. SWE-bench eval <strong>KHÔNG chạy tự động</strong>. Code không biết instance nào pass ở iteration nào. Phải submit thủ công sau khi chạy xong.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== TAB 3: Q2 ===================== -->
+<div class="panel" id="panel-3">
+  <div class="qa-card">
+    <div class="qa-question">Câu 2: Tại sao lại gọi là 10 trajectories? Self-evolution "revision" hoạt động thế nào? Code có implement không?</div>
+
+    <div class="two-col">
+      <div>
+        <div class="qa-section">
+          <div class="qa-section-title title-paper">Paper (Section 4.2 + 5.1)</div>
+          <div class="qa-text">
+            Bắt đầu từ 5 trajectories gốc, paper apply <strong>Reflection & Revision</strong> cho <em>từng</em> trajectory:
+            <br><br>
+            <strong>Bước 1 — Reflect (Find Critical Step):</strong> LLM đọc trajectory, tìm "bước quan trọng nhất" quyết định toàn bộ solution.
+            <br><br>
+            <strong>Bước 2 — Reflect (Conclude Features):</strong> LLM extract approach_summary, modified_files, key_changes, assumptions, component_not_touched, different_perspective.
+            <br><br>
+            <strong>Bước 3 — Revision:</strong> Dựa trên analysis ở bước 2, LLM/agent tạo ra trajectory mới từ góc nhìn hoàn toàn khác (dùng <code>different_perspective</code> làm định hướng).
+          </div>
+          <div class="qa-highlight">// Eq. 3-4 trong paper
+Rⱼ = Reflect(τⱼ, t)     // reflection report
+τⱼ' = Revise(τⱼ, Rⱼ)   // revised trajectory
+
+// 5 trajectories gốc + 5 revised = 10 total
+Γ₀ = Γ₀ᵖˡᵃⁿ ∪ Γ₀ᵐᵘᵗᵃᵗᵉ = {τ₁,...,τ₅,τ₁',...,τ₅'}</div>
+        </div>
+      </div>
+      <div>
+        <div class="qa-section">
+          <div class="qa-section-title title-code">Code thực tế</div>
+          <div class="qa-text"><strong>KHÔNG CÓ Reflection/Revision tự động</strong>. Không có bước nào trong code tự động biến 5 thành 10.</div>
+        </div>
+        <div class="qa-section">
+          <div class="qa-section-title title-gap">GAP cụ thể</div>
+          <div class="qa-text">Code gần nhất với "Revision" là <code>alternative_strategy.py</code> operator, nhưng có sự khác biệt lớn:</div>
+          <div class="qa-highlight">// alternative_strategy.py làm gì:
+// 1. Đọc summary CUỐI CÙNG từ traj.pool (KHÔNG phải raw trajectory)
+// 2. Gọi LLM tạo strategy TEXT mới
+// 3. Lưu vào system_prompt/instance.yaml
+// 4. Iteration KẾ TIẾP chạy lại từ đầu với system prompt mới
+
+// Paper làm gì:
+// 1. Đọc trajectory thực tế bước-by-bước
+// 2. LLM phân tích critical step (prompt rất chi tiết, Appendix A.1.2)
+// 3. Agent chạy lại NGAY LẬP TỨC với guidance từ reflection
+// 4. Tạo ra trajectory revised ngay trong cùng vòng lặp</div>
+          <div class="alert alert-danger" style="margin-top:8px">
+            <code>evaluation_function.py</code> (TODO) là module scoring cần thiết để đánh giá 10 trajectories này. Không có nó, không biết trajectory nào tốt nhất để đưa vào Recombination.
+          </div>
+        </div>
+        <div class="qa-section">
+          <div class="qa-section-title title-paper">Prompts của Paper (Appendix A.1.2)</div>
+          <div class="qa-text">Paper có 3 prompts riêng biệt, output JSON:</div>
+          <div class="qa-highlight">// Prompt 1: Reflection—Find the Critical Step
+// → Output: {"critical_step": {"step": N, "action": "...", "reasoning": "...", "impact": "..."}}
+
+// Prompt 2: Reflection—Conclude Features
+// → Output: {approach_summary, modified_files, key_changes, strategy,
+//            specific_technique_from_first_solution, assumptions_made,
+//            component_not_touched, different_perspective}
+
+// Prompt 3: Revision (sử dụng output từ Prompt 2)
+// → "...I want you to explore a completely different approach.
+//    Instead of following the same strategy, consider looking at this
+//    from a 'different_perspective' angle..."</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== TAB 4: Q3 ===================== -->
+<div class="panel" id="panel-4">
+  <div class="qa-card">
+    <div class="qa-question">Câu 3: Recombination có đảm bảo trajectory kết hợp sẽ tốt nhất không? Có cơ chế gì bảo vệ nếu 2 trajectory tốt bị combine với 2 cái tệ?</div>
+
+    <div class="two-col">
+      <div>
+        <div class="qa-section">
+          <div class="qa-section-title title-paper">Paper (Section 4.3 + 4.4.2)</div>
+          <div class="qa-text">Paper có <strong>2 cơ chế bảo vệ</strong>:</div>
+          <div class="qa-text"><strong>① Evaluation Function (Eq. 8):</strong></div>
+          <div class="qa-highlight">Reward(τ,t) = w₁·TaskCompletion(τ,t)
+             + w₂·ReasoningQuality(τ)
+             + w₃·Efficiency(τ)
+
+TaskCompletion = AutoEval(τ,t) + λ·ExpertEval(τ,t)
+// AutoEval: non-empty patch, code edits, trajectory length
+// ExpertEval: LLM-based quality assessment</div>
+          <div class="qa-text"><strong>② Selection (Eq. 10):</strong></div>
+          <div class="qa-highlight">Γ_{k+1} = Select(Γ_k ∪ Γ'_k^new, o)
+// Γ_k = trajectories iteration hiện tại
+// Γ'_k^new = trajectories mới từ Recombination
+// o = số elite trajectories cần giữ lại
+// Cơ chế: top-o theo reward score + diversity metrics
+// → đảm bảo trajectories tệ bị loại</div>
+          <div class="qa-text">Nhờ Selection, nếu 2 trajectory tốt (A và B) bị combine sai với 2 cái tệ, thì sau khi eval: trajectory tệ có điểm thấp → bị loại khỏi pool. Trajectory từ A+B nếu tốt → được giữ lại.</div>
+        </div>
+      </div>
+      <div>
+        <div class="qa-section">
+          <div class="qa-section-title title-code">Code thực tế — KHÔNG có cơ chế bảo vệ này</div>
+          <div class="qa-text">Crossover operator (<code>SE/operators/crossover.py:163</code>):</div>
+          <div class="qa-highlight">// Luôn lấy 2 summary GẦN NHẤT, không phân biệt tốt/tệ
+iteration1_key, iteration1_data = valid_iterations[-2]
+iteration2_key, iteration2_data = valid_iterations[-1]
+
+// Comment trong code tự thừa nhận:
+// "Could choose the last two or the two with best results;
+//  here we choose the last two"</div>
+          <div class="alert alert-danger" style="margin-top:8px">
+            <strong>Trường hợp bạn lo ngại hoàn toàn CÓ THỂ xảy ra trong code hiện tại:</strong> Nếu iteration 3 (gần nhất) rất tệ và iteration 4 cũng tệ, crossover sẽ vẫn combine 2 cái tệ này và dùng làm system prompt cho iteration 5. Không có filter, không có fallback.
+          </div>
+        </div>
+        <div class="qa-section">
+          <div class="qa-section-title title-gap">Sự khác biệt quan trọng về bản chất</div>
+          <div class="qa-text">
+            Trong <strong>paper</strong>: Crossover kết hợp <em>trajectory steps thực tế</em> — lấy đoạn giỏi từ trajectory A, ghép với đoạn giỏi từ trajectory B → trajectory mới hoàn chỉnh. Output là trajectory chạy được.
+            <br><br>
+            Trong <strong>code</strong>: Crossover đọc 2 <em>LLM-generated summaries</em> từ traj.pool → gọi LLM tạo <em>strategy text</em> mới → lưu vào system_prompt YAML → iteration tiếp theo chạy lại từ đầu với strategy đó. Không có trajectory fusion thực sự.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== TAB 5: Q4 ===================== -->
+<div class="panel" id="panel-5">
+  <div class="qa-card">
+    <div class="qa-question">Câu 4: Sau recombination xong sẽ làm gì? Có thể hội tụ sau iteration 1 không? Phải chạy bao nhiêu vòng mới biết kết quả tốt nhất?</div>
+
+    <div class="two-col">
+      <div>
+        <div class="qa-section">
+          <div class="qa-section-title title-paper">Paper (Section 4.4 — Refinement & Section 4.4.2 — Convergence)</div>
+          <div class="qa-text">Sau Recombination, paper làm:</div>
+          <div class="qa-text"><strong>1. Refinement</strong>: trajectory mới được tối ưu hóa — loại bỏ redundant steps, streamline action sequences, inject risk-aware guidance từ pool.</div>
+          <div class="qa-text"><strong>2. Evaluation</strong>: chấm điểm tất cả trajectories trong pool mới (<code>Γ_k ∪ Γ'_k^new</code>) bằng Reward function.</div>
+          <div class="qa-text"><strong>3. Selection</strong>: giữ lại <em>o</em> trajectories tốt nhất (elite + diverse).</div>
+          <div class="qa-text"><strong>4. Lặp lại</strong>: quay lại Revision cho pool mới → Recombination → Refinement → ...</div>
+          <div class="qa-text"><strong>Convergence criteria:</strong></div>
+          <div class="qa-highlight">// Dừng khi:
+// 1. max reward improvement < ε (consecutive iterations)
+// 2. Hết số iterations đã định
+// Final output:
+τ* = argmax_{τ∈Γ_K} Reward(τ,t)</div>
+          <div class="qa-text"><strong>Có thể hội tụ sau iteration 1 không?</strong> Về lý thuyết CÓ, nếu Revision tìm được trajectory rất tốt ngay từ đầu và Evaluation function xác nhận điểm cao vượt ngưỡng ε. Nhưng thực tế hiếm vì Recombination mở ra search space mới mà Revision đơn lẻ không thể khám phá.</div>
+        </div>
+      </div>
+      <div>
+        <div class="qa-section">
+          <div class="qa-section-title title-code">Code thực tế</div>
+          <div class="qa-text">Sau tất cả iterations chạy xong, code chỉ làm:</div>
+          <div class="qa-highlight">// basic_run.py — sau vòng lặp for
+// 1. In thống kê traj.pool
+pool_stats = traj_pool_manager.get_pool_stats()
+logger.info(f"Final pool: {pool_stats}")
+
+// 2. HẾT. Không có gì thêm.
+// Không eval, không select, không convergence check</div>
+          <div class="alert alert-warn" style="margin-top:8px">
+            Code dừng sau khi chạy đúng số iterations trong YAML config. Không có:<br>
+            ❌ Convergence detection<br>
+            ❌ Early stopping nếu đã tìm được solution tốt<br>
+            ❌ Selection giữ trajectory tốt nhất<br>
+            ❌ Evaluation between iterations
+          </div>
+          <div class="qa-section">
+            <div class="qa-section-title title-paper">Để biết trajectory nào tốt nhất</div>
+            <div class="qa-text">Với code hiện tại, chỉ có 2 cách:</div>
+            <div class="qa-highlight">// Cách 1: Submit từng iteration riêng lên SWE-bench
+sb-cli submit swe-bench_verified test \
+  --predictions_path iteration_1/preds.json --run_id run_it1
+sb-cli submit ... --predictions_path iteration_2/preds.json
+// → Compare results.json của từng iteration
+
+// Cách 2: Dùng evaluation_function.py (chưa tích hợp)
+// SE/evaluation_function.py:select_best_trajectory()
+// Gọi DeepSeek R1 để chọn trajectory tốt nhất từ pool</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider">
+    <div class="section-title" style="font-size:15px;margin-bottom:12px">Tóm tắt: Pass@1 và Pass@5 tính thế nào?</div>
+    <div class="two-col">
+      <div class="step-card">
+        <div class="step-title">Pass@1</div>
+        <div class="step-desc">Chọn 1 trajectory tốt nhất từ toàn bộ pool (thường là trajectory của final iteration hoặc iteration có patch tốt nhất theo heuristics), submit lên SWE-bench. % instances resolved = Pass@1.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-title">Pass@5</div>
+        <div class="step-desc">Giữ 5 candidate trajectories (từ 5 iterations hoặc top-5 theo eval score), nếu BẤT KỲ 1 trong 5 resolve được instance → tính pass. % instances với ít nhất 1 solution = Pass@5.</div>
+      </div>
+    </div>
+    <div class="alert alert-info" style="margin-top:12px">
+      Trong paper: SE-Agent với Claude-3.7-Sonnet đạt <strong>Pass@1 = 61.2%</strong> và <strong>Pass@5 = 63.6%</strong> trên SWE-bench Verified. Với Claude-4-Sonnet: <strong>Pass@1 = 80%</strong>. Khoảng cách Pass@1 vs Pass@5 nhỏ (chỉ ~2-3%) cho thấy SE-Agent đã tạo được trajectories rất nhất quán về chất lượng.
+    </div>
+  </div>
+</div>
+
+</div><!-- end content -->
+
+<script>
+function switchTab(n) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', i===n));
+  document.querySelectorAll('.panel').forEach((p,i) => p.classList.toggle('active', i===n));
+}
+
+function switchFile(n) {
+  document.querySelectorAll('.file-tab').forEach((t,i) => t.classList.toggle('active', i===n));
+  document.querySelectorAll('.file-panel').forEach((p,i) => p.classList.toggle('active', i===n));
+}
+</script>
+</body>
+</html>
